@@ -1,60 +1,50 @@
-"""
+"""Map data points into a color space.
+
+Conceptually, there is a
+- data space: numeric data as x, xy, or xyz
+- color space: the range of colors which are determined by the data points
+- configuration space: configuration for how the data ranges are
+    converted, how the colours are combined, etc
 
 
-How I want to use this:
-my_map = ColorMap(LERP)
-d1 = my_map.add_dimension(linearity=1)
-d2 = my_map.add_dimension(linearity=0.5)
-d1.add_mapping(-10,'blue')
-d1.add_mapping(0,'beige')
-d1.add_mapping(30,'orange')
-d2.add_mapping(min_val,'white')
-d2.add_mapping(max_val,'rgb(147,10,20)')
+ColorFactory is the color factory. It exposes methods to configure the factory
+and get a color based on dataspace parameters.
+
+Each dataspace dimension determines a single color (dimension); when there
+are multiple dimensions the resulting colors are then blended using any of
+several blend methods.
+
+ColorFactory is defined by the color blending method and one or more config dimensions
+Each Dimension is defined by the linearity of the relation between the data parameter
+and the colorspace color range, and one or more ConfigPoints.
+A ConfigPoint relates a single data value in one dimension to a single output color.
+A Dimension with only one ConfigPoint simply always produces that color.
+A Dimension with multiple ConfigPoints will interpolate colors along gradiants
+defined by numerically adjacent ConfigPoints.  Out of range data values are
+clamped to the min/max data values of the available ConfigPoints.
+
+
+Example use:
+factory = ColorFactory(LERP)
+d1 = factory.add_dimension(linearity=1)
+d2 = factory.add_dimension(linearity=0.5)
+d1.add_config(-10,'blue')
+d1.add_config(0,'beige')
+d1.add_config(30,'orange')
+d2.add_config(min_val,'white')
+d2.add_config(max_val,'rgb(147,10,20)')
 
 
 for (various x values, with text):
-    print(f"<td style={map_map.css_fg_bg(x)}>{x}</td>")
+    print(f"<td style={factory.css_fg_bg(x)}>{x}</td>")
 
 
 for (various x,y values with no text)
-    print(f"<td style={my_map.css_bg(x,y)}>&nbsp;<td>")
+    print(f"<td style={factory.css_bg(x,y)}>&nbsp;<td>")
 
 
 ----
 
-
-BLEND_LERP
-BLEND_ADDITIVE
-BLEND_
-
-COLOR_NAMES = {}
-_reverse_color_names = {}
-
-class Color(str):
-    inititalize (__new__) from:
-        Color object (return self)
-        RGB tuple
-        color name string
-        color definition string
-            "cmyk(c,,y,k)"
-            "rgb(x,y,z)"
-            "lab(l,a,b)"
-
-    self: str that can be used to define itself. E.g. "rgb(x,y,z)"
-    .red, .green, .blue - simple properties.  This is internal representation.
-    .rgb - @property
-    .hex: str eg #0345ff @property
-    .css_fg_bg() @property
-    .css_bg() @property
-    .cmyk() @property
-    .name(): cached @property reverse-calculated str eg "white" or "green(ish)" or ....
-    .luminance cached @property
-    internal representation: .r, .g, .b .. maybe Lab later
-
-    @classmethod blend:
-        constants for blend methods
-        method for each blend method (list of colours)
-        highest-level function (list of colours, blend_method)
 
 
 
@@ -75,19 +65,19 @@ class ConfigPoint(float):
 class Dimension:
     def __init__( self,linearity:float=1):
         self.linearity=linearity
-        self.mappings = [] # keep these sorted!
+        self.configs = [] # keep these sorted!
         self.ready = False
 
-    def add_mapping( self, determiner:float, color:str) -> None:
-        '''Create a ConfigPoint for a mapping in this dimension.'''
+    def add_config( self, determiner:float, color:str) -> None:
+        '''Create a ConfigPoint for a config in this dimension.'''
         pt = ConfigPoint(determiner,color)
         if pt is None:
             raise ValueError("Bad determiner of color")
-        self.mappings.append(pt)
-        self.mappings.sort()
+        self.configs.append(pt)
+        self.configs.sort()
         self.ready = True
 
-class ColorMap:
+class ColorFactory:
 
 
     def __init__(blend_method:str=LERP):
@@ -96,63 +86,30 @@ class ColorMap:
         add an empty dimension
         self.ready = False
 
-    def map( determiner:tuple ) -> Color:
+    def get_color( determiner:tuple ) -> Color:
 
     .num_dimensions - number of dimensions
-    .ready: bool # True if enough data to make work, ie >= 1 dimension and >= 1 mapping/dimension
+    .ready: bool # True if enough data to make work, ie >= 1 dimension and >= 1 config/dimension
     .dimensions:list
 
     @property
     def ready(self):
         return all(d.ready for d in self.dimensions) if self.dimensions else False
 
----
-color_tools
-
-
-
----
-
-color_map
-
-
-dataspace:
-- data points:
-    - x [y,z..]
-
-color map:
-- blend method (=lerp)
-- dimensions (1+):
-    - linearity (default=1)
-    - mapping points (1+):
-        - data paremeter
-        - color result
-
-colorspace
-- color points (colors)
-
-
-map config point: color + determiner
-
-each map:
-    one or more dimensions
-    a blend type
-
-
-axes (dimensions):
-    each axis has
-        one or more config points
-            stored in order sorted by determiner
-        a linearity
-
-
 
 """
 
 import re
 import math
-import statistics
 from color_names import COLOR_NAMES
+
+ALPHA_BLEND = "alpha"
+ADDITIVE_BLEND = "additive"
+SUBTRACTIVE_BLEND = "subtractive"
+DIFFERENCE_BLEND = "difference"
+MULTIPLICATIVE_BLEND = "multiplicative"
+OVERLAY_BLEND = "overlay"
+
 
 RGBTuple = tuple
 
@@ -161,36 +118,9 @@ class Color:
     # Regular expression pattern to match the rgb str format
     _rgb_pattern = re.compile(r"rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
 
-    ALPHA_BLEND = "alpha"
-    ADDITIVE_BLEND = "additive"
-    SUBTRACTIVE_BLEND = "subtractive"
-    DIFFERENCE_BLEND = "difference"
-    MULTIPLICATIVE_BLEND = "multiplicative"
-    OVERLAY_BLEND = "overlay"
-
-    # Calculate _distances among colors
-    # _distances = [
-    #    math.sqrt(sum((a - b) ** 2 for a, b in zip(rgb1, rgb2)))
-    #    for rgb1 in COLOR_NAMES.values() for rgb2 in COLOR_NAMES.values()
-    # ]
-
-    # _distances = []
-    # for rgb1 in COLOR_NAMES.values():
-    #    for rgb2 in COLOR_NAMES.values():
-    #        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(rgb1, rgb2)))
-    #        _distances.append(distance)
-
-    ## Calculate mean and standard deviation
-    # _mean_distance = statistics.mean(_distances)
-    # _std_deviation = statistics.stdev(_distances)
-
-    # Calculate thresholds based on mean and standard deviation
-    # exact_match_threshold = _mean_distance / 3
-    # nearly_match_threshold = _mean_distance + _std_deviation
-    # moderately_match_threshold = _mean_distance + _std_deviation * 2
-
-    # These are expressed as a distance index, where white<->black is 1.0
-    # and identical is 0.0
+    # Color closeness values for figuring out what color a given RGB value
+    # is similar to. These are expressed as a distance index,
+    # where white<->black is 1.0 and identical is 0.0
     exact_match_threshold = 0.01
     nearly_match_threshold = 0.10
     moderately_match_threshold = 0.20
@@ -323,8 +253,7 @@ class Color:
             return f"vaguely {closest_color} ({closeness:.3f})"
 
     @staticmethod
-    def blend(colors, blend_method=None):
-        blend_method = blend_method if blend_method else Color.ALPHA_BLEND
+    def blend(colors, blend_method=ALPHA_BLEND):
         if not colors:
             raise ValueError("The list of colors must not be empty.")
         elif len(colors) == 1:
@@ -333,17 +262,17 @@ class Color:
         result: RGBTuple = (0, 0, 0)
 
         for color in colors:
-            if blend_method == Color.ALPHA_BLEND:
+            if blend_method == ALPHA_BLEND:
                 result = Color._blend_alpha(result, color)
-            elif blend_method == Color.ADDITIVE_BLEND:
+            elif blend_method == ADDITIVE_BLEND:
                 result = Color._blend_additive(result, color)
-            elif blend_method == Color.SUBTRACTIVE_BLEND:
+            elif blend_method == SUBTRACTIVE_BLEND:
                 result = Color._blend_subtractive(result, color)
-            elif blend_method == Color.DIFFERENCE_BLEND:
+            elif blend_method == DIFFERENCE_BLEND:
                 result = Color._blend_subtractive(result, color)
-            elif blend_method == Color.MULTIPLICATIVE_BLEND:
+            elif blend_method == MULTIPLICATIVE_BLEND:
                 result = Color._blend_multiply(result, color)
-            elif blend_method == Color.OVERLAY_BLEND:
+            elif blend_method == OVERLAY_BLEND:
                 result = Color._blend_overlay(result, color)
             else:
                 raise ValueError(f"Invalid blend method: {blend_method}")
