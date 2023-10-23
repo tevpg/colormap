@@ -43,60 +43,6 @@ for (various x,y values with no text)
     print(f"<td style={factory.css_bg(x,y)}>&nbsp;<td>")
 
 
-----
-
-
-
-
-class ConfigPoint(float):
-    def __new__(cls, determiner, color):
-        instance = super(ConfigPoint, cls).__new__(cls, determiner)
-        instance.color = Color(color)
-        if not instance.color:
-            raise ValueError("Invalid color")
-        return instance
-
-    def __eq__(self, other):
-        if isinstance(other, ConfigPoint):
-            return (self.real == other.real) and (self.color == other.color)
-        return False
-
-
-class Dimension:
-    def __init__( self,linearity:float=1):
-        self.linearity=linearity
-        self.configs = [] # keep these sorted!
-        self.ready = False
-
-    def add_config( self, determiner:float, color:str) -> None:
-        '''Create a ConfigPoint for a config in this dimension.'''
-        pt = ConfigPoint(determiner,color)
-        if pt is None:
-            raise ValueError("Bad determiner of color")
-        self.configs.append(pt)
-        self.configs.sort()
-        self.ready = True
-
-class ColorFactory:
-
-
-    def __init__(blend_method:str=LERP):
-
-    def add_dimension( linearity:float=1 ) -> int:
-        add an empty dimension
-        self.ready = False
-
-    def get_color( determiner:tuple ) -> Color:
-
-    .num_dimensions - number of dimensions
-    .ready: bool # True if enough data to make work, ie >= 1 dimension and >= 1 config/dimension
-    .dimensions:list
-
-    @property
-    def ready(self):
-        return all(d.ready for d in self.dimensions) if self.dimensions else False
-
-
 """
 
 import re
@@ -131,11 +77,10 @@ class Color:
         """Create the color object.
 
         Initialize from any of
-            Color
-            RGB tuple
-            color name str
-            string like "rgb(20,56,198)"
-
+            Color object
+            RGB tuple, e.g. (127,0,255)
+            color name str, e.g. "seagreen"
+            rgb string, e.g. "rgb(20,56,198)"
         """
 
         rgb: RGBTuple = None
@@ -362,4 +307,80 @@ class Color:
         """Clamp the values of a color tuple to the range 0-255."""
         return tuple(max(0, min(255, value)) for value in color_tuple)
 
-    # And here, where it is easy to lose track of, is initialization.
+
+class ConfigPoint(float):
+    """A single dataspace point to color definition."""
+
+    def __new__(cls, determiner, color):
+        instance = super(ConfigPoint, cls).__new__(cls, determiner)
+        instance.color = Color(color)
+        if not instance.color:
+            raise ValueError("Invalid color")
+        return instance
+
+    def __eq__(self, other):
+        if isinstance(other, ConfigPoint):
+            return (self.real == other.real) and (self.color == other.color)
+        return False
+
+
+class Dimension(int):
+    _current_value = 0
+
+    def __new__(cls, linearity: float = 1):
+        instance = super(Dimension, cls).__new__(cls, cls._current_value)
+        cls._current_value += 1
+        # instance.linearity = linearity
+        # instance.configs = []
+        # instance.ready = False
+        return instance
+
+    def __init__(self, linearity: float = 1):
+        self.linearity = linearity
+        self.configs = []
+        self.ready = False
+
+    def add_config(self, determiner: float, color: str) -> None:
+        """Create a ConfigPoint for a config in this dimension."""
+        pt = ConfigPoint(determiner, color)
+        if pt is None:
+            raise ValueError("Bad determiner of color")
+        self.configs.append(pt)
+        self.configs.sort()
+        self.ready = True
+
+
+class ColorFactory:
+    def __init__(self, blend_method: str = ALPHA_BLEND):
+        self.blend_method = blend_method
+        self.dimensions = []  # Each is a Dimension
+
+    def add_dimension(self, linearity: float = 1) -> Dimension:
+        # add an empty dimension
+        d = Dimension(linearity)
+        self.dimensions.append(d)
+        return d
+
+    def get_color(self, determiner: tuple) -> Color:
+        return Color("red")  # FIXME
+
+    @property
+    def num_dimensions(self):
+        return len(self.dimensions)
+
+    @property
+    def ready(self):
+        """Test if the ColorFactory has enough configuration to work."""
+        return (
+            all(d.ready for d in self.dimensions) if self.dimensions else False
+        )
+
+    def css_bg(self, determiner: tuple) -> str:
+        """Make a CSS background color style string component."""
+        return f"background-color:{self.get_color(determiner).html_color};"
+
+    def css_fg_bg(self, determiner: tuple) -> str:
+        """Make CSS style background color component with contrasting text color."""
+        bg = self.get_color(determiner)
+        fg = "black" if bg.luminance() >= 0.5 else "white"
+        return f"color:{fg};background-color:{bg.html_color};"
