@@ -1,7 +1,7 @@
-"""Map data points into a color space.
+"""Generate blended colors based on n-dimensional data inputs.
 
 Conceptually, there is a
-- data space: numeric data as x, xy, or xyz
+- data space: numeric data in one or more dimensions
 - color space: the range of colors which are determined by the data points
 - configuration space: configuration for how the data ranges are
     converted, how the colours are combined, etc
