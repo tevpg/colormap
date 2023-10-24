@@ -15,7 +15,7 @@ are multiple dimensions the resulting colors are then blended using any of
 several blend methods.
 
 ColorFactory is defined by the color blending method and one or more config dimensions
-Each Dimension is defined by the linearity of the relation between the data parameter
+Each Dimension is defined by the interpolation_exponent of the relation between the data parameter
 and the colorspace color range, and one or more ConfigPoints.
 A ConfigPoint relates a single data value in one dimension to a single output color.
 A Dimension with only one ConfigPoint simply always produces that color.
@@ -26,8 +26,8 @@ clamped to the min/max data values of the available ConfigPoints.
 
 Example use:
 factory = ColorFactory(LERP)
-d1 = factory.add_dimension(linearity=1)
-d2 = factory.add_dimension(linearity=0.5)
+d1 = factory.add_dimension(interpolation_exponent=1)
+d2 = factory.add_dimension(interpolation_exponent=0.5)
 d1.add_config(-10,'blue')
 d1.add_config(0,'beige')
 d1.add_config(30,'orange')
@@ -47,9 +47,12 @@ for (various x,y values with no text)
 
 import re
 import math
+from typing import Tuple
+from functools import lru_cache
 from color_names import COLOR_NAMES
 
-ALPHA_BLEND = "alpha"
+LERP_BLEND = "linear interpolation"
+ALPHA_BLEND = LERP_BLEND
 ADDITIVE_BLEND = "additive"
 SUBTRACTIVE_BLEND = "subtractive"
 DIFFERENCE_BLEND = "difference"
@@ -61,6 +64,8 @@ RGBTuple = tuple
 
 
 class Color:
+    """A single color and its behaviours."""
+
     # Regular expression pattern to match the rgb str format
     _rgb_pattern = re.compile(r"rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
 
@@ -82,7 +87,6 @@ class Color:
             color name str, e.g. "seagreen"
             rgb string, e.g. "rgb(20,56,198)"
         """
-
         rgb: RGBTuple = None
         if isinstance(color_init, Color):
             rgb = color_init.rgb
@@ -166,7 +170,7 @@ class Color:
             and self.blue == other.blue
         )
 
-    def closest_color_name(self):
+    def similar_to(self):
         if (self.red, self.green, self.blue) in self._reverse_color_names:
             return self._reverse_color_names[(self.red, self.green, self.blue)]
 
@@ -186,19 +190,20 @@ class Color:
 
         # Make a pretty string of the result.
 
-        WHITE_BLACK_DISTANCE = 442.58  # Euclidean dist from white to black
+        WHITE_BLACK_DISTANCE = 442.58  # sqrt(3 * 255*255) -- dist from white to black
         closeness = closest_distance / WHITE_BLACK_DISTANCE
-        if closeness <= Color.exact_match_threshold:
-            return f"{closest_color} ({closeness:.3f})"
-        elif closeness <= Color.nearly_match_threshold:
-            return f"nearly {closest_color} ({closeness:.3f})"
-        elif closeness <= Color.moderately_match_threshold:
-            return f"{closest_color}(ish) ({closeness:.3f})"
-        else:
-            return f"vaguely {closest_color} ({closeness:.3f})"
+        return f"{closeness*100:.1f}% off of {closest_color}"
+        #if closeness <= Color.exact_match_threshold:
+        #    return f"{closest_color} ({closeness:.3f})"
+        #elif closeness <= Color.nearly_match_threshold:
+        #    return f"nearly {closest_color} ({closeness:.3f})"
+        #elif closeness <= Color.moderately_match_threshold:
+        #    return f"{closest_color}(ish) ({closeness:.3f})"
+        #else:
+        #    return f"vaguely {closest_color} ({closeness:.3f})"
 
     @staticmethod
-    def blend(colors, blend_method=ALPHA_BLEND):
+    def blend(colors, blend_method=ALPHA_BLEND) -> RGBTuple:
         if not colors:
             raise ValueError("The list of colors must not be empty.")
         elif len(colors) == 1:
@@ -207,8 +212,8 @@ class Color:
         result: RGBTuple = (0, 0, 0)
 
         for color in colors:
-            if blend_method == ALPHA_BLEND:
-                result = Color._blend_alpha(result, color)
+            if blend_method in [LERP_BLEND, ALPHA_BLEND]:
+                result = Color.blend_lerp(result, color)
             elif blend_method == ADDITIVE_BLEND:
                 result = Color._blend_additive(result, color)
             elif blend_method == SUBTRACTIVE_BLEND:
@@ -225,13 +230,28 @@ class Color:
         return result
 
     @staticmethod
-    def _blend_alpha(base_color: RGBTuple, blend_color: RGBTuple) -> RGBTuple:
-        """Alpha blending of two RGB color tuples."""
-        alpha = blend_color[3] / 255.0  # Alpha value in the range 0-1
+    def blend_lerp(base_color, blend_color, alpha: float = 0.5) -> RGBTuple:
+        """Blend two colours using linear interpolation.
+
+        Linear interpolation (LERP) of two RGB color tuples.
+        :param base_color: The starting RGB color tuple.
+        :param blend_color: The ending RGB color tuple.
+        :param alpha: The interpolation parameter in the range [0, 1].
+        :return: The interpolated RGB color tuple.
+        This seems to be the same thing as ALPHA.
+        """
+        alpha = max(0.0, min(1.0, alpha))  # Ensure alpha is within [0, 1]
+        base_color = Color(base_color)
+        blend_color = Color(blend_color)
         blended_color = (
-            int(base_color[0] + (blend_color[0] - base_color[0]) * alpha),
-            int(base_color[1] + (blend_color[1] - base_color[1]) * alpha),
-            int(base_color[2] + (blend_color[2] - base_color[2]) * alpha),
+            int(base_color.red + (blend_color.red - base_color.red) * alpha),
+            int(
+                base_color.green
+                + (blend_color.green - base_color.green) * alpha
+            ),
+            int(
+                base_color.blue + (blend_color.blue - base_color.blue) * alpha
+            ),
         )
         return Color._clamp(blended_color)
 
@@ -327,26 +347,35 @@ class ConfigPoint(float):
 class Dimension(int):
     _current_value = 0
 
-    def __new__(cls, linearity: float = 1):
+    def __new__(cls, interpolation_exponent: float = 1):
         instance = super(Dimension, cls).__new__(cls, cls._current_value)
         cls._current_value += 1
-        # instance.linearity = linearity
-        # instance.configs = []
-        # instance.ready = False
         return instance
 
-    def __init__(self, linearity: float = 1):
-        self.linearity = linearity
+    def __init__(self, interpolation_exponent: float = 1):
+        if interpolation_exponent < 0:
+            raise ValueError("Interpolation exponent must be >= 0.")
+        self.interpolation_exponent = interpolation_exponent
         self.configs = []
         self.ready = False
+        self.min = None
+        self.max = None
+        self.range = None
 
     def add_config(self, determiner: float, color: str) -> None:
         """Create a ConfigPoint for a config in this dimension."""
         pt = ConfigPoint(determiner, color)
         if pt is None:
             raise ValueError("Bad determiner of color")
+        if pt.real in [cp.real for cp in self.configs]:
+            raise ValueError(
+                f"ConfigPoint with determiner {pt} already exists"
+            )
         self.configs.append(pt)
         self.configs.sort()
+        self.min = float(min(self.configs))
+        self.max = float(max(self.configs))
+        self.range = self.max - self.min
         self.ready = True
 
 
@@ -354,15 +383,80 @@ class ColorFactory:
     def __init__(self, blend_method: str = ALPHA_BLEND):
         self.blend_method = blend_method
         self.dimensions = []  # Each is a Dimension
+        self._config_hash = 0
 
-    def add_dimension(self, linearity: float = 1) -> Dimension:
+    def add_dimension(self, interpolation_exponent: float = 1) -> Dimension:
         # add an empty dimension
-        d = Dimension(linearity)
+        d = Dimension(interpolation_exponent)
         self.dimensions.append(d)
         return d
 
-    def get_color(self, determiner: tuple) -> Color:
-        return Color("red")  # FIXME
+    def get_color(self, *determiner_tuple: Tuple[float]) -> Color:
+        """Wrap _chached_get_color and clear its lru cache if needed."""
+        hashlist = [self.ready,self.blend_method,len(self.dimensions),tuple(self.dimensions)]
+        for d in self.dimensions:
+            d:Dimension
+            hashlist.append(len(d.configs),d.interpolation_exponent,tuple(d.configs))
+        current_config_hash = hash(tuple(hashlist))
+        if current_config_hash != self._config_hash:
+            self._cached_get_color.cache_clear()
+            self._config_hash = current_config_hash
+        return self._cached_get_color(self,determiner_tuple)
+
+
+    @lru_cache(maxsize=50)  # Keeping the last 50 results at a guess
+    def _cached_get_color(self, *determiner_tuple: Tuple[float]) -> Color:
+        if not self.ready:
+            raise ValueError("ColorFactory is not ready")
+
+        if len(determiner_tuple) != self.num_dimensions:
+            raise ValueError(
+                f"Different number of dimensions in determiner ({len(determiner_tuple)}) "
+                f"and configuration ({self.num_dimensions})."
+            )
+
+        # Calculate colors for each dimension using exponential interpolation
+        colors_by_dimension = []
+
+        for i, dimension in enumerate(self.dimensions):
+            color_for_dimension = self._calculate_color_for_dimension(
+                determiner_tuple[i], dimension
+            )
+            colors_by_dimension.append(color_for_dimension)
+
+        # Blend colors from different dimensions
+        final_color = Color.blend(colors_by_dimension, self.blend_method)
+        return final_color
+
+    def _calculate_color_for_dimension(self, determiner, dimension):
+        if dimension.range <= 0:
+            return dimension.configs[0].color
+
+        # Clamp determiner to dimension's range
+        determiner = max(dimension.min, min(dimension.max, determiner))
+        # Adjust determiner according to the dimension's interpolation_exponent
+        determiner_range = determiner - dimension.min
+        adjusted_determiner = dimension.min + (
+            determiner_range**dimension.interpolation_exponent
+        ) * (dimension.range ** (1 - dimension.interpolation_exponent))
+
+        # Find the two adjacent ConfigPoints for interpolation
+        for j in range(len(dimension.configs) - 1):
+            if determiner <= dimension.configs[j + 1]:
+                gradient_min = dimension.configs[j]
+                gradient_max = dimension.configs[j + 1]
+                break
+
+        if gradient_min.real == gradient_max.real:
+            raise ValueError("Gradient has the same min and max values.")
+
+        # Interpolate between the two adjacent colors
+        blend_factor = (adjusted_determiner - gradient_min.real) / float(
+            gradient_max - gradient_min
+        )
+        return Color.blend_lerp(
+            gradient_min.color, gradient_max.color, blend_factor
+        )
 
     @property
     def num_dimensions(self):
