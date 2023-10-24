@@ -47,6 +47,7 @@ for (various x,y values with no text)
 
 import re
 import math
+import json
 from typing import Tuple
 from functools import lru_cache
 from color_names import COLOR_NAMES
@@ -391,21 +392,21 @@ class ColorFactory:
         self.dimensions.append(d)
         return d
 
+    def _get_hash(self):
+        """Get a hash value for the ColorFactory (for change detection)."""
+        serialized = self.dump(quiet=True)
+        return hash(tuple(serialized))
+
     def get_color(self, *determiner_tuple: Tuple[float]) -> Color:
-        """Wrap _chached_get_color and clear its lru cache if needed."""
-        hashlist = [self.ready,self.blend_method,len(self.dimensions),tuple(self.dimensions)]
-        for d in self.dimensions:
-            d:Dimension
-            hashlist.append(len(d.configs),d.interpolation_exponent,tuple(d.configs))
-        current_config_hash = hash(tuple(hashlist))
+        """Wrap _chached_get_color so can clear its lru cache if needed."""
+        current_config_hash = self._get_hash()
         if current_config_hash != self._config_hash:
             self._cached_get_color.cache_clear()
             self._config_hash = current_config_hash
-        return self._cached_get_color(self,determiner_tuple)
-
+        return self._cached_get_color(determiner_tuple)
 
     @lru_cache(maxsize=50)  # Keeping the last 50 results at a guess
-    def _cached_get_color(self, *determiner_tuple: Tuple[float]) -> Color:
+    def _cached_get_color(self, determiner_tuple: Tuple[float]) -> Color:
         if not self.ready:
             raise ValueError("ColorFactory is not ready")
 
@@ -478,3 +479,35 @@ class ColorFactory:
         bg = self.get_color(determiner)
         fg = "black" if bg.luminance() >= 0.5 else "white"
         return f"color:{fg};background-color:{bg.html_color};"
+
+    def dump(self,quiet:bool=False) -> list[str]:
+        """Dump the contents of the ColorFactory.
+
+        Returns the contents as a list of strings (lines).
+        By default it also prints the info; quiet flag
+        will suppress printing.
+        """
+        lines = []
+        lines.append(f"ColorFactory {self}")
+        lines.append(f"  ready: {self.ready}; dimensions: {len(self.dimensions)}; blend method: {self.blend_method}")
+        for i, d in enumerate(self.dimensions):
+            d:Dimension
+            lines.append(f"  Dimension {i}:")
+            lines.append(f"    ready: {d.ready}; configs: {len(d.configs)}; min/max: {d.min}/{d.max}; range {d.range}; exp: {d.interpolation_exponent}")
+            for j, pt in enumerate(d.configs):
+                pt:ConfigPoint
+                lines.append(f"      ConfigPoint {j}: {pt.real}; {pt.color} ({pt.color.similar_to()})")
+        if not quiet:
+            for line in lines:
+                print(line)
+        return lines
+
+def testable_factory( obj_num:int=0 ) -> ColorFactory:
+    if obj_num == 0:
+        cf = ColorFactory()
+        d1 = cf.add_dimension()
+        d1.add_config( -10,"blue")
+        d1.add_config(5,"beige")
+        d1.add_config(30,"red")
+    cf.dump()
+    return cf
