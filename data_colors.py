@@ -49,7 +49,7 @@ import re
 import math
 from typing import Tuple
 from functools import lru_cache
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw  # , ImageFont
 
 from color_names import COLOR_NAMES
 
@@ -107,7 +107,8 @@ class Color:
 
     @classmethod
     def _parse_rgb_str(cls, color_init) -> RGBTuple:
-        # Use re.search to find the values in the string
+        """Get an RGB tuple from a str like 'rgb(30,77,220)'."""
+        # Pre-compied regular expression to get the rGB bits.
         match = cls._rgb_pattern.search(color_init)
 
         if match:
@@ -142,6 +143,7 @@ class Color:
 
     @property
     def html_color(self):
+        """Return color as an HTML color str (e.g. '#07f378')."""
         return f"#{self.red:02X}{self.green:02X}{self.blue:02X}"
 
     @property
@@ -150,16 +152,23 @@ class Color:
         return (self.red, self.green, self.blue)
 
     def luminance(self) -> float:
+        """Calculate the color's luminance."""
         luminance = 0.299 * self.red + 0.587 * self.green + 0.114 * self.blue
         return luminance
 
     def __str__(self):
+        """Str representation.
+
+        This is such that can be used to init a Color.
+        """
         return f"rgb({self.red},{self.green},{self.blue})"
 
     def __repr__(self):
+        """Color representation."""
         return f"<Color ({self.red},{self.green},{self.blue})>"
 
     def __eq__(self, other):
+        """Test equality as having same RGB."""
         return (
             self.red == other.red
             and self.green == other.green
@@ -167,6 +176,13 @@ class Color:
         )
 
     def similar_to(self):
+        """Get human-readable name for what this color is kinda like.
+
+        Distance to nearest color is expressed as % of maximum color
+        distance possible (ie distance from white to black).
+        Uses the color dictionary and its reverse, initialized above.
+
+        """
         if (self.red, self.green, self.blue) in self._reverse_color_names:
             return self._reverse_color_names[(self.red, self.green, self.blue)]
 
@@ -184,12 +200,16 @@ class Color:
                 (closest_distance, closest_color), (this_distance, this_name)
             )
 
-        WHITE_BLACK_DISTANCE = 441.67  # sqrt(3 * 255*255) -- dist from white to black
+        # Closeness to the color is fraction of its distance compared
+        # to max distance in the RGB color cube (dist from white to black)
+        # pylint: disable-next=invalid-name
+        WHITE_BLACK_DISTANCE = 441.67  # sqrt(3 * 255*255)
         closeness = closest_distance / WHITE_BLACK_DISTANCE
         return f"{closeness*100:.1f}% off of {closest_color}"
 
     @staticmethod
     def blend(colors, blend_method=ALPHA_BLEND) -> RGBTuple:
+        """Blend unspecified number of colors together."""
         if not colors:
             raise ValueError("The list of colors must not be empty.")
         elif len(colors) == 1:
@@ -219,11 +239,6 @@ class Color:
     def blend_lerp(base_color, blend_color, alpha: float = 0.5) -> RGBTuple:
         """Blend two colours using linear interpolation.
 
-        Linear interpolation (LERP) of two RGB color tuples.
-        :param base_color: The starting RGB color tuple.
-        :param blend_color: The ending RGB color tuple.
-        :param alpha: The interpolation parameter in the range [0, 1].
-        :return: The interpolated RGB color tuple.
         This seems to be the same thing as ALPHA.
         """
         alpha = max(0.0, min(1.0, alpha))  # Ensure alpha is within [0, 1]
@@ -315,9 +330,14 @@ class Color:
 
 
 class ConfigPoint(float):
-    """A single dataspace point to color definition."""
+    """A single dataspace point to color definition.
+
+    Each is essentially a value point (e.g. 37.6) and a Color
+    If handled naively it will feel like a float.
+    """
 
     def __new__(cls, determiner, color):
+        """Create new float object for the instance."""
         instance = super(ConfigPoint, cls).__new__(cls, determiner)
         instance.color = Color(color)
         if not instance.color:
@@ -325,20 +345,34 @@ class ConfigPoint(float):
         return instance
 
     def __eq__(self, other):
+        """Test for equality: both value and color."""
         if isinstance(other, ConfigPoint):
             return (self.real == other.real) and (self.color == other.color)
         return False
 
 
 class Dimension(int):
+    """Dimension obects handle all the mappings for one data dimension.
+
+    E.g. x, or y.  It has a collection of ConfigPoints and the exponent
+    for the curve that is used in the interpolation between the ConfigPoints.
+    Higher exponent (>1) emphasizes small differences at the top end of the
+    range; low exponent (<1) emphasizes small differences at the bottom
+    of the range.
+
+    The int value is simply a handle.
+    """
+
     _current_value = 0
 
     def __new__(cls, interpolation_exponent: float = 1):
+        """Create new instance."""
         instance = super(Dimension, cls).__new__(cls, cls._current_value)
         cls._current_value += 1
         return instance
 
     def __init__(self, interpolation_exponent: float = 1):
+        """Set initial values for Dimension properties."""
         if interpolation_exponent < 0:
             raise ValueError("Interpolation exponent must be >= 0.")
         self.interpolation_exponent = interpolation_exponent
@@ -349,7 +383,7 @@ class Dimension(int):
         self.range = None
 
     def add_config(self, determiner: float, color: str) -> None:
-        """Create a ConfigPoint for a config in this dimension."""
+        """Add a ConfigPoint to this dimension."""
         pt = ConfigPoint(determiner, color)
         if pt is None:
             raise ValueError("Bad determiner of color")
@@ -366,13 +400,16 @@ class Dimension(int):
 
 
 class ColorFactory:
+    """ColorFactory looks after n-dimensional mappings their colors."""
+
     def __init__(self, blend_method: str = ALPHA_BLEND):
+        """Initialize empty ColorFactory (not much to it)."""
         self.blend_method = blend_method
         self.dimensions = []  # Each is a Dimension
         self._config_hash = 0
 
     def add_dimension(self, interpolation_exponent: float = 1) -> Dimension:
-        # add an empty dimension
+        """Add an empty Dimension to the ColorFactory."""
         d = Dimension(interpolation_exponent)
         self.dimensions.append(d)
         return d
@@ -446,6 +483,7 @@ class ColorFactory:
 
     @property
     def num_dimensions(self):
+        """Count number of dimensions in this configuration."""
         return len(self.dimensions)
 
     @property
@@ -465,7 +503,7 @@ class ColorFactory:
         fg = "black" if bg.luminance() >= 0.5 else "white"
         return f"color:{fg};background-color:{bg.html_color};"
 
-    def dump(self,quiet:bool=False) -> list[str]:
+    def dump(self, quiet: bool = False) -> list[str]:
         """Dump the contents of the ColorFactory.
 
         Returns the contents as a list of strings (lines).
@@ -474,55 +512,60 @@ class ColorFactory:
         """
         lines = []
         lines.append(f"ColorFactory {self}")
-        lines.append(f"  ready: {self.ready}; dimensions: {len(self.dimensions)}; blend method: {self.blend_method}")
+        lines.append(
+            f"  ready: {self.ready}; dimensions: {len(self.dimensions)}; "
+            f"blend method: {self.blend_method}"
+        )
         for i, d in enumerate(self.dimensions):
-            d:Dimension
+            d: Dimension
             lines.append(f"  Dimension {i}:")
-            lines.append(f"    ready: {d.ready}; configs: {len(d.configs)}; min/max: {d.min}/{d.max}; range {d.range}; exp: {d.interpolation_exponent}")
+            lines.append(
+                f"    ready: {d.ready}; configs: {len(d.configs)}; "
+                f"min/max: {d.min}/{d.max}; range {d.range}; "
+                f"exp: {d.interpolation_exponent}"
+            )
             for j, pt in enumerate(d.configs):
-                pt:ConfigPoint
-                lines.append(f"      ConfigPoint {j}: {pt.real}; {pt.color} ({pt.color.similar_to()})")
+                pt: ConfigPoint
+                lines.append(
+                    f"      ConfigPoint {j}: {pt.real}; {pt.color} ({pt.color.similar_to()})"
+                )
         if not quiet:
             for line in lines:
                 print(line)
         return lines
 
-def _visualize1d(self, image_width:int, vertical: bool = False):
-    """Create a 400px wide by 20px high image for 1D data, optionally vertically, and return it."""
+    def _visualize1d(self, image_width: int, vertical: bool = False):
+        """Create a bar image for 1D data, optionally vertical."""
+        # Define the image size
+        image_size = (image_width, 20) if not vertical else (20, image_width)
 
-    # Define the image size
-    image_size = (image_width, 20) if not vertical else (20, image_width)
+        # Create a new image with a white background
+        image = Image.new("RGB", image_size, "white")
+        draw = ImageDraw.Draw(image)
 
-    # Create a new image with a white background
-    image = Image.new("RGB", image_size, "white")
+        # Get the min and max values for x from ColorFactory's dimensions
+        x_min = self.dimensions[0].min
+        x_max = self.dimensions[0].max
 
-    # Create a drawing context
-    draw = ImageDraw.Draw(image)
+        # Calculate the step size for x
+        x_step = (x_max - x_min) / (image_size[0] - 1)
 
-    # Get the min and max values for x from ColorFactory's dimensions
-    x_min = self.dimensions[0].min
-    x_max = self.dimensions[0].max
+        # Iterate over each line, horizontally or vertically
+        for i in range(image_size[0]):
+            x = x_min + i * x_step
+            color = self.get_color(x)
 
-    # Calculate the step size for x
-    x_step = (x_max - x_min) / (image_size[0] - 1)
+            if vertical:
+                # Draw a vertical line with the same color
+                draw.line([(0, i), (image_size[1], i)], color)
+            else:
+                # Draw a horizontal line with the same color
+                draw.line([(i, 0), (i, image_size[1])], color)
 
-    # Iterate over each line, horizontally or vertically
-    for i in range(image_size[0]):
-        x = x_min + i * x_step
-        color = self.get_color(x)
+        return image
 
-        if vertical:
-            # Draw a vertical line with the same color
-            draw.line([(0, i), (image_size[1], i)], color)
-        else:
-            # Draw a horizontal line with the same color
-            draw.line([(i, 0), (i, image_size[1])], color)
-
-    return image
-
-    def _visualize2d(self,image_width:int) -> Image:
+    def _visualize2d(self, image_width: int) -> Image:
         """Make a 400x400 image of 2d data."""
-
         # Define the image size and canvas size
         image_size = (image_width, image_width)
         canvas_size = (image_width, image_width)
@@ -544,22 +587,26 @@ def _visualize1d(self, image_width:int, vertical: bool = False):
         for i in range(image_size[0]):
             for j in range(image_size[1]):
                 x = x_min + i * x_step
-                y = y_max - j * y_step  # Inverted to match the image coordinates
+                y = (
+                    y_max - j * y_step
+                )  # Inverted to match the image coordinates
                 color = self.get_color(x, y)
                 image.putpixel((i, j), color)
         return image
 
-
     def visualize(self):
+        """Make a color-spectrum image to show the current config."""
         if not self.ready:
             print("not ready")
             return
         if len(self.dimensions) == 1:
-            image = self._visualize1d()
+            image = self._visualize1d(400)
         elif len(self.dimensions) == 2:
             image = self._visualize2d(400)
         else:
-            print(f"no visualization available for {len(self.dimensions)}-D ColorFactory")
+            print(
+                f"no visualization available for {len(self.dimensions)}-D ColorFactory"
+            )
             return
 
         filename = "tmp_plot.png"
@@ -567,23 +614,24 @@ def _visualize1d(self, image_width:int, vertical: bool = False):
         print(f"Saved image as {filename}")
 
 
-def testable_factory( obj_num:int=0 ) -> ColorFactory:
+def testable_factory(obj_num: int = 0) -> ColorFactory:
+    """Create a variety of ColorFactory objects, for testing & experimenting."""
     if obj_num == 0:
         cf = ColorFactory()
         d1 = cf.add_dimension()
-        d1.add_config( -10,"blue")
-        d1.add_config(5,"beige")
-        d1.add_config(30,"red")
+        d1.add_config(-10, "blue")
+        d1.add_config(5, "beige")
+        d1.add_config(30, "red")
     elif obj_num == 1:
         cf = ColorFactory()
         d1 = cf.add_dimension()
-        d1.add_config( -10,"blue")
-        d1.add_config(5,"beige")
-        d1.add_config(30,"red")
+        d1.add_config(-10, "blue")
+        d1.add_config(5, "beige")
+        d1.add_config(30, "red")
         d2 = cf.add_dimension()
-        d2.add_config(0,"yellow")
-        d2.add_config(100,"seagreen")
+        d2.add_config(0, "yellow")
+        d2.add_config(100, "seagreen")
     else:
-        print( f"no def for {obj_num}")
+        print(f"no def for {obj_num}")
     cf.dump()
     return cf
