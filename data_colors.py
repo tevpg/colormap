@@ -1,11 +1,12 @@
 """Generate blended colors based on n-dimensional data inputs.
 
+Copyright (c) 2023, tevpg@github.com
+
 Conceptually, there is a
 - data space: numeric data in one or more dimensions
 - color space: the range of colors which are determined by the data points
 - configuration space: configuration for how the data ranges are
     converted, how the colours are combined, etc
-
 
 ColorFactory is the color factory. It exposes methods to configure the factory
 and get a color based on dataspace parameters.
@@ -15,14 +16,13 @@ are multiple dimensions the resulting colors are then blended using any of
 several blend methods.
 
 ColorFactory is defined by the color blending method and one or more config dimensions
-Each Dimension is defined by the interpolation_exponent of the relation between the data parameter
-and the colorspace color range, and one or more ConfigPoints.
+Each Dimension is defined by the interpolation_exponent of the relation between the
+data parameter and the colorspace color range, and one or more ConfigPoints.
 A ConfigPoint relates a single data value in one dimension to a single output color.
 A Dimension with only one ConfigPoint simply always produces that color.
 A Dimension with multiple ConfigPoints will interpolate colors along gradiants
 defined by numerically adjacent ConfigPoints.  Out of range data values are
 clamped to the min/max data values of the available ConfigPoints.
-
 
 Example use:
 factory = ColorFactory(LERP)
@@ -34,10 +34,8 @@ d1.add_config(30,'orange')
 d2.add_config(min_val,'white')
 d2.add_config(max_val,'rgb(147,10,20)')
 
-
 for (various x values, with text):
     print(f"<td style={factory.css_fg_bg(x)}>{x}</td>")
-
 
 for (various x,y values with no text)
     print(f"<td style={factory.css_bg(x,y)}>&nbsp;<td>")
