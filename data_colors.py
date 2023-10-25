@@ -543,39 +543,6 @@ class ColorFactory:
         final_color = Color.blend(colors_list, self.blend_method)
         return final_color
 
-    # pylint:disable-next=pointless-string-statement
-    """
-    def _calculate_color_for_dimension(self, determiner, dimension):
-        if dimension.range <= 0:
-            return dimension.configs[0].color
-
-        # Clamp determiner to dimension's range
-        determiner = max(dimension.min, min(dimension.max, determiner))
-        # Adjust determiner according to the dimension's interpolation_exponent
-        determiner_range = determiner - dimension.min
-        adjusted_determiner = dimension.min + (
-            determiner_range**dimension.interpolation_exponent
-        ) * (dimension.range ** (1 - dimension.interpolation_exponent))
-
-        # Find the two adjacent ConfigPoints for interpolation
-        for j in range(len(dimension.configs) - 1):
-            if adjusted_determiner <= dimension.configs[j + 1]:
-                gradient_min = dimension.configs[j]
-                gradient_max = dimension.configs[j + 1]
-                break
-
-        if gradient_min.real == gradient_max.real:
-            raise ValueError("Gradient has the same min and max values.")
-
-        # Interpolate between the two adjacent colors
-        blend_factor = (adjusted_determiner - gradient_min.real) / float(
-            gradient_max - gradient_min
-        )
-        return Color.blend_lerp(
-            gradient_min.color, gradient_max.color, blend_factor
-        )
-    """
-
     @property
     def num_dimensions(self):
         """Count number of dimensions in this configuration."""
