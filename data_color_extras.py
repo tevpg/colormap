@@ -3,46 +3,49 @@
 from PIL import Image, ImageDraw
 from data_colors import ColorFactory
 
-
-def _visualize1d(factory, image_size: int, orientation:str = "horizontal"):
-    """Create a bar image for 1D data, optionally vertical."""
+def visualize_dimension(
+    dimension, image_size: tuple, orientation: str = "horizontal"
+):
+    """Create a bar image for one dimension of data, optionally vertical."""
     # Define the image size
     if orientation == "horizontal":
         vertical = False
+        extents = image_size
     elif orientation == "vertical":
         vertical = True
+        extents = (image_size[1],image_size[0])
     else:
         raise ValueError("orientation must be vertical or horizontal")
-    extents = (20, image_size) if vertical else (image_size,20)
+
 
     # Create a new image with a white background
     image = Image.new("RGB", extents, "white")
     draw = ImageDraw.Draw(image)
 
     # Get the min and max values for x from ColorFactory's dimensions
-    dmin = factory.dimensions[0].min
-    dmax = factory.dimensions[0].max
+    dmin = dimension.min
+    dmax = dimension.max
     # Calculate the step size for x
-    step = (dmax - dmin) / (image_size - 1)
+    step = (dmax - dmin) / (image_size[0] - 1)
     if vertical:
-        for i in range(image_size):
-            x = dmax-i*step
-            draw.line([(0, i), (extents[1], i)], factory.get_color(x))
+        for i in range(image_size[0]):
+            x = dmax - i * step
+            draw.line([(0, i), (extents[1], i)], dimension.get_color(x))
     else:
-        for i in range(image_size):
-            x = dmin+i*step
-            draw.line([(i, 0), (i, extents[1])], factory.get_color(x))
+        for i in range(image_size[0]):
+            x = dmin + i * step
+            draw.line([(i, 0), (i, extents[1])], dimension.get_color(x))
 
     return image
 
-def _visualize2d(factory, image_size: int) -> Image:
-    """Make a 400x400 image of 2d data."""
-    # Define the image size and canvas size
-    extents = (image_size, image_size)
-    canvas_size = (image_size, image_size)
 
+def _visualize2d(factory, image_size: tuple) -> Image:
+    """Make an image of 2d data.
+
+    image_size is (width,height)
+    """
     # Create a new image with a white background
-    image = Image.new("RGB", canvas_size, "white")
+    image = Image.new("RGB", image_size, "white")
 
     # Get the min and max values for x and y from ColorFactory's dimensions
     x_min = factory.dimensions[0].min
@@ -51,29 +54,48 @@ def _visualize2d(factory, image_size: int) -> Image:
     y_max = factory.dimensions[1].max
 
     # Calculate the step size for x and y
-    x_step = (x_max - x_min) / (extents[0] - 1)
-    y_step = (y_max - y_min) / (extents[1] - 1)
+    x_step = (x_max - x_min) / (image_size[0] - 1)
+    y_step = (y_max - y_min) / (image_size[1] - 1)
 
     # Plot the values on the 400x400 canvas
-    for i in range(extents[0]):
-        for j in range(extents[1]):
+    for i in range(image_size[0]):
+        for j in range(image_size[1]):
             x = x_min + i * x_step
-            y = (
-                y_max - j * y_step
-            )  # Inverted to match the image coordinates
+            y = y_max - j * y_step  # Inverted to match the image coordinates
             color = factory.get_color(x, y)
             image.putpixel((i, j), color)
     return image
 
-def visualize(factory:ColorFactory,orientation:str="horizontal"):
+
+def visualize(factory: ColorFactory, orientation: str = "horizontal"):
     """Make a color-spectrum image to show the current config."""
     if not factory.ready:
         print("not ready")
         return
     if len(factory.dimensions) == 1:
-        image = _visualize1d(factory,400,orientation)
+        image = visualize_dimension(factory.dimensions[0], (400,20), orientation)
     elif len(factory.dimensions) == 2:
-        image = _visualize2d(factory,400)
+        gap = 5
+        main_size = 400
+        bar_width = 20
+        main_image = _visualize2d(factory, (main_size, main_size))
+        x_image = visualize_dimension(
+            factory.dimensions[0], (main_size, bar_width)
+        )
+        y_image = visualize_dimension(
+            factory.dimensions[1],
+            (main_size, bar_width),
+            orientation="vertical",
+        )
+        image = Image.new(
+            "RGB",
+            (main_size + gap + bar_width, main_size + gap + bar_width),
+            "white",
+        )
+        image.paste(main_image, (gap + bar_width, 0))
+        image.paste(x_image, (gap + bar_width, gap + main_size))
+        image.paste(y_image, (0, 0))
+
     else:
         print(
             f"no visualization available for {len(factory.dimensions)}-D ColorFactory"
@@ -102,6 +124,14 @@ def testable_factory(obj_num: int = 0) -> ColorFactory:
         d2 = cf.add_dimension()
         d2.add_config(0, "yellow")
         d2.add_config(100, "seagreen")
+    elif obj_num == 2:
+        cf = ColorFactory()
+        d1 = cf.add_dimension()
+        d1.add_config(0, "white")
+        d1.add_config(100, "red")
+        d2 = cf.add_dimension()
+        d2.add_config(0, "white")
+        d2.add_config(100, "blue")
     else:
         print(f"no def for {obj_num}")
     cf.dump()

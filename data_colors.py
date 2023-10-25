@@ -219,6 +219,14 @@ class Color(tuple):
         return f"{closest_color} ({(1 - closeness)*100:.1f}% match)"
 
     @staticmethod
+    def invert( color:'Color') -> 'Color':
+        """Inverts the color."""
+        r = 255-color[0]
+        g = 255-color[1]
+        b = 255-color[2]
+        return Color(Color._clamp_tuple((r,g,b)))
+
+    @staticmethod
     def blend(colors_list: list["Color"], blend_method=ALPHA_BLEND) -> tuple:
         """Blend unspecified number of colors together."""
         if not colors_list:
