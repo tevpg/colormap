@@ -47,9 +47,10 @@ for (various x,y values with no text)
 
 import re
 import math
-import json
 from typing import Tuple
 from functools import lru_cache
+from PIL import Image, ImageDraw, ImageFont
+
 from color_names import COLOR_NAMES
 
 LERP_BLEND = "linear interpolation"
@@ -70,13 +71,7 @@ class Color:
     # Regular expression pattern to match the rgb str format
     _rgb_pattern = re.compile(r"rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
 
-    # Color closeness values for figuring out what color a given RGB value
-    # is similar to. These are expressed as a distance index,
-    # where white<->black is 1.0 and identical is 0.0
-    exact_match_threshold = 0.01
-    nearly_match_threshold = 0.10
-    moderately_match_threshold = 0.20
-
+    # Reversed color names dict for similar_to()
     _reverse_color_names = {v: k for k, v in COLOR_NAMES.items()}
 
     def __init__(self, color_init):
@@ -189,19 +184,9 @@ class Color:
                 (closest_distance, closest_color), (this_distance, this_name)
             )
 
-        # Make a pretty string of the result.
-
-        WHITE_BLACK_DISTANCE = 442.58  # sqrt(3 * 255*255) -- dist from white to black
+        WHITE_BLACK_DISTANCE = 441.67  # sqrt(3 * 255*255) -- dist from white to black
         closeness = closest_distance / WHITE_BLACK_DISTANCE
         return f"{closeness*100:.1f}% off of {closest_color}"
-        #if closeness <= Color.exact_match_threshold:
-        #    return f"{closest_color} ({closeness:.3f})"
-        #elif closeness <= Color.nearly_match_threshold:
-        #    return f"nearly {closest_color} ({closeness:.3f})"
-        #elif closeness <= Color.moderately_match_threshold:
-        #    return f"{closest_color}(ish) ({closeness:.3f})"
-        #else:
-        #    return f"vaguely {closest_color} ({closeness:.3f})"
 
     @staticmethod
     def blend(colors, blend_method=ALPHA_BLEND) -> RGBTuple:
@@ -443,7 +428,7 @@ class ColorFactory:
 
         # Find the two adjacent ConfigPoints for interpolation
         for j in range(len(dimension.configs) - 1):
-            if determiner <= dimension.configs[j + 1]:
+            if adjusted_determiner <= dimension.configs[j + 1]:
                 gradient_min = dimension.configs[j]
                 gradient_max = dimension.configs[j + 1]
                 break
@@ -502,6 +487,86 @@ class ColorFactory:
                 print(line)
         return lines
 
+def _visualize1d(self, image_width:int, vertical: bool = False):
+    """Create a 400px wide by 20px high image for 1D data, optionally vertically, and return it."""
+
+    # Define the image size
+    image_size = (image_width, 20) if not vertical else (20, image_width)
+
+    # Create a new image with a white background
+    image = Image.new("RGB", image_size, "white")
+
+    # Create a drawing context
+    draw = ImageDraw.Draw(image)
+
+    # Get the min and max values for x from ColorFactory's dimensions
+    x_min = self.dimensions[0].min
+    x_max = self.dimensions[0].max
+
+    # Calculate the step size for x
+    x_step = (x_max - x_min) / (image_size[0] - 1)
+
+    # Iterate over each line, horizontally or vertically
+    for i in range(image_size[0]):
+        x = x_min + i * x_step
+        color = self.get_color(x)
+
+        if vertical:
+            # Draw a vertical line with the same color
+            draw.line([(0, i), (image_size[1], i)], color)
+        else:
+            # Draw a horizontal line with the same color
+            draw.line([(i, 0), (i, image_size[1])], color)
+
+    return image
+
+    def _visualize2d(self,image_width:int) -> Image:
+        """Make a 400x400 image of 2d data."""
+
+        # Define the image size and canvas size
+        image_size = (image_width, image_width)
+        canvas_size = (image_width, image_width)
+
+        # Create a new image with a white background
+        image = Image.new("RGB", canvas_size, "white")
+
+        # Get the min and max values for x and y from ColorFactory's dimensions
+        x_min = self.dimensions[0].min
+        x_max = self.dimensions[0].max
+        y_min = self.dimensions[1].min
+        y_max = self.dimensions[1].max
+
+        # Calculate the step size for x and y
+        x_step = (x_max - x_min) / (image_size[0] - 1)
+        y_step = (y_max - y_min) / (image_size[1] - 1)
+
+        # Plot the values on the 400x400 canvas
+        for i in range(image_size[0]):
+            for j in range(image_size[1]):
+                x = x_min + i * x_step
+                y = y_max - j * y_step  # Inverted to match the image coordinates
+                color = self.get_color(x, y)
+                image.putpixel((i, j), color)
+        return image
+
+
+    def visualize(self):
+        if not self.ready:
+            print("not ready")
+            return
+        if len(self.dimensions) == 1:
+            image = self._visualize1d()
+        elif len(self.dimensions) == 2:
+            image = self._visualize2d(400)
+        else:
+            print(f"no visualization available for {len(self.dimensions)}-D ColorFactory")
+            return
+
+        filename = "tmp_plot.png"
+        image.save(filename)
+        print(f"Saved image as {filename}")
+
+
 def testable_factory( obj_num:int=0 ) -> ColorFactory:
     if obj_num == 0:
         cf = ColorFactory()
@@ -509,5 +574,16 @@ def testable_factory( obj_num:int=0 ) -> ColorFactory:
         d1.add_config( -10,"blue")
         d1.add_config(5,"beige")
         d1.add_config(30,"red")
+    elif obj_num == 1:
+        cf = ColorFactory()
+        d1 = cf.add_dimension()
+        d1.add_config( -10,"blue")
+        d1.add_config(5,"beige")
+        d1.add_config(30,"red")
+        d2 = cf.add_dimension()
+        d2.add_config(0,"yellow")
+        d2.add_config(100,"seagreen")
+    else:
+        print( f"no def for {obj_num}")
     cf.dump()
     return cf
