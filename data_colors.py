@@ -49,16 +49,13 @@ from functools import lru_cache
 
 from color_names import COLOR_NAMES
 
-LERP_BLEND = "linear interpolation"
+LERP_BLEND = "lerp"  # linear interpolation
 ALPHA_BLEND = LERP_BLEND
 ADDITIVE_BLEND = "additive"
 SUBTRACTIVE_BLEND = "subtractive"
 DIFFERENCE_BLEND = "difference"
 MULTIPLICATIVE_BLEND = "multiplicative"
 OVERLAY_BLEND = "overlay"
-
-
-RGBTuple = tuple
 
 
 class Color(tuple):
@@ -79,13 +76,13 @@ class Color(tuple):
             color name str, e.g. "seagreen"
             rgb string, e.g. "rgb(20, 56, 198)"
         """
-        if isinstance(color_init,Color):
+        if isinstance(color_init, Color):
             return color_init
 
         rgb = None
-        #if isinstance(color_init, Color):
+        # if isinstance(color_init, Color):
         #    rgb = tuple(color_init)
-        if isinstance(color_init, RGBTuple):
+        if isinstance(color_init, tuple):
             if len(color_init) == 3:
                 rgb = color_init
             else:
@@ -119,8 +116,8 @@ class Color(tuple):
         """Get color band from tuple."""
         return self[2]
 
-    #@property
-    #def rgb(self):
+    # @property
+    # def rgb(self):
     #    """Return rgb -- FIXME placeholder until scrub out 'rgb' use elsewhere."""
     #    return tuple(self)
 
@@ -131,7 +128,7 @@ class Color(tuple):
             raise ValueError("RGB values must be between 0 and 255")
 
     @staticmethod
-    def _parse_rgb_str(rgb_str) -> RGBTuple:
+    def _parse_rgb_str(rgb_str) -> tuple:
         """Get an RGB tuple from a str like 'rgb(30,77,220)'."""
         match = Color._rgb_pattern.match(rgb_str)
         if match:
@@ -141,11 +138,11 @@ class Color(tuple):
         raise ValueError("Invalid RGB string format")
 
     @staticmethod
-    def _validate_rgb_tuple(color_tuple: RGBTuple) -> bool:
+    def _validate_rgb_tuple(color_tuple: tuple) -> bool:
         """Validate the RGB color tuple, raise error for any problems."""
         if color_tuple is None:
             raise ValueError("Can't get color from init parameter")
-        if not isinstance(color_tuple, RGBTuple) or len(color_tuple) != 3:
+        if not isinstance(color_tuple, tuple) or len(color_tuple) != 3:
             raise ValueError("Color tuple must have exactly 3 elements.")
         if not all(isinstance(c, int) for c in color_tuple):
             raise TypeError("All elements of color tuple must be int.")
@@ -156,7 +153,7 @@ class Color(tuple):
         return True
 
     @staticmethod
-    def _clamp_tuple(color_tuple: RGBTuple) -> RGBTuple:
+    def _clamp_tuple(color_tuple: tuple) -> tuple:
         """Clamp the values of a color tuple to the range 0-255."""
         return tuple(max(0, min(255, value)) for value in color_tuple)
 
@@ -219,10 +216,10 @@ class Color(tuple):
         # pylint: disable-next=invalid-name
         WHITE_BLACK_DISTANCE = 441.67  # sqrt(3 * 255*255)
         closeness = closest_distance / WHITE_BLACK_DISTANCE
-        return f"{closeness*100:.1f}% off of {closest_color}"
+        return f"{closest_color} ({(1 - closeness)*100:.1f}% match)"
 
     @staticmethod
-    def blend(colors_list: list["Color"], blend_method=ALPHA_BLEND) -> RGBTuple:
+    def blend(colors_list: list["Color"], blend_method=ALPHA_BLEND) -> tuple:
         """Blend unspecified number of colors together."""
         if not colors_list:
             raise ValueError("The list of colors must not be empty.")
@@ -232,7 +229,9 @@ class Color(tuple):
         # Blend first two colors until only one color left
         while len(colors_list) > 2:
             # Reduce list by blending 1st 2 colors.
-            colors_list = [Color.blend(colors_list[:2],blend_method)] + colors_list[2:]
+            colors_list = [
+                Color.blend(colors_list[:2], blend_method)
+            ] + colors_list[2:]
 
         # At this point, there are exactly two colors.
         color1, color2 = colors_list[0:2]
@@ -280,9 +279,7 @@ class Color(tuple):
         return blended_color
 
     @staticmethod
-    def _blend_additive(
-        base_color: 'Color', blend_color: 'Color'
-    ) -> 'Color':
+    def _blend_additive(base_color: "Color", blend_color: "Color") -> "Color":
         """Additive blending of two RGB color tuples."""
         blended_color = (
             min(255, base_color.red + blend_color.red),
@@ -293,8 +290,8 @@ class Color(tuple):
 
     @staticmethod
     def _blend_subtractive(
-        base_color: 'Color', blend_color: 'Color'
-    ) -> 'Color':
+        base_color: "Color", blend_color: "Color"
+    ) -> "Color":
         """Subtractive blending of two RGB color tuples."""
         blended_color = (
             max(0, base_color.red - blend_color.red),
@@ -306,7 +303,7 @@ class Color(tuple):
     @staticmethod
     def _blend_difference(
         base_color: "Color", blend_color: "Color"
-    ) -> 'Color':
+    ) -> "Color":
         """Difference blending of two RGB color tuples."""
         blended_color = (
             abs(base_color.red - blend_color.red),
@@ -316,9 +313,7 @@ class Color(tuple):
         return Color(blended_color)
 
     @staticmethod
-    def _blend_multiply(
-        base_color: 'Color', blend_color: 'Color'
-    ) -> 'Color':
+    def _blend_multiply(base_color: "Color", blend_color: "Color") -> "Color":
         """Multiplicative blending of two RGB color tuples."""
         blended_color = (
             (base_color.red * blend_color.red) // 255,
@@ -328,9 +323,7 @@ class Color(tuple):
         return Color(blended_color)
 
     @staticmethod
-    def _blend_overlay(
-        base_color: 'Color', blend_color: 'Color'
-    ) -> 'Color':
+    def _blend_overlay(base_color: "Color", blend_color: "Color") -> "Color":
         """Overlay blending of two RGB color tuples."""
 
         def overlay_channel(base, blend):
@@ -368,6 +361,30 @@ class ConfigPoint(float):
             return (self.real == other.real) and (self.color == other.color)
         return False
 
+    def dump(
+        self, indent: str = "", index: int = None, quiet: bool = False
+    ) -> list[str]:
+        """Dump the contents of the ConfigPoint as readable text.
+
+        Returns the contents as a list of strings (lines) and by default, prints.
+
+        :index, if present, is just a courtesy number to add to the text
+        :indent is what to put at the start of each line (e.g. "  ")
+        :quiet, if True, suppresses printing.
+
+        This is used for human reading and also as input to
+        hash function for configuration change detection.
+        """
+        index = "" if index is None else index
+        lines = [
+            f"{indent}ConfigPoint {index}:  {self.real:6.2f};  "
+            f"{str(self.color):16s} --> {self.color.similar_to()}"
+        ]
+        if not quiet:
+            for line in lines:
+                print(line)
+        return lines
+
 
 class Dimension(int):
     """Dimension obects handle all the mappings for one data dimension.
@@ -378,7 +395,7 @@ class Dimension(int):
     range; low exponent (<1) emphasizes small differences at the bottom
     of the range.
 
-    The int value is simply a handle.
+    The int value is simply an id.
     """
 
     _current_value = 0
@@ -416,6 +433,67 @@ class Dimension(int):
         self.range = self.max - self.min
         self.ready = True
 
+    def get_color(self, determiner: float) -> Color:
+        """Blend within gradients to get a color for this determiner value."""
+        if self.range <= 0:
+            return self.configs[0].color
+
+        # Clamp determiner to self's range
+        determiner = max(self.min, min(self.max, determiner))
+        # Adjust determiner according to the self's interpolation_exponent
+        determiner_range = determiner - self.min
+        adjusted_determiner = self.min + (
+            determiner_range**self.interpolation_exponent
+        ) * (self.range ** (1 - self.interpolation_exponent))
+
+        # Find the two adjacent ConfigPoints for interpolation
+        for j in range(len(self.configs) - 1):
+            if adjusted_determiner <= self.configs[j + 1]:
+                gradient_min = self.configs[j]
+                gradient_max = self.configs[j + 1]
+                break
+
+        if gradient_min.real == gradient_max.real:
+            raise ValueError("Gradient has the same min and max values.")
+
+        # Interpolate between the two adjacent colors
+        blend_factor = (adjusted_determiner - gradient_min.real) / float(
+            gradient_max - gradient_min
+        )
+        return Color.blend_lerp(
+            gradient_min.color, gradient_max.color, blend_factor
+        )
+
+    def dump(
+        self, indent: str = "", index: int = None, quiet: bool = False
+    ) -> list[str]:
+        """Dump the contents of the Dimension as readable text.
+
+        Returns the contents as a list of strings (lines) and by default, prints.
+
+        :index, if present, is just a courtesy number to add to the Dimension text
+        :indent is what to put at the start of each line (e.g. "  ")
+        :quiet, if True, suppresses printing.
+
+        This is used for human reading and also as input to
+        hash function for change detection of a Dimension.
+        """
+        index = "" if index is None else index
+        lines = []
+        lines.append(f"{indent}Dimension {index}:")
+        lines.append(
+            f"{indent}  ready: {self.ready}; configs: {len(self.configs)}; "
+            f"min/max/range: {self.min}/{self.max}/{self.range}; "
+            f"interpolation_exponent: {self.interpolation_exponent}"
+        )
+        for j, pt in enumerate(self.configs):
+            pt: ConfigPoint
+            lines = lines + pt.dump("      ", j, quiet=True)
+        if not quiet:
+            for line in lines:
+                print(line)
+        return lines
+
 
 class ColorFactory:
     """ColorFactory looks after n-dimensional mappings their colors."""
@@ -445,7 +523,7 @@ class ColorFactory:
             self._config_hash = current_config_hash
         return self._cached_get_color(determiner_tuple)
 
-    @lru_cache(maxsize=50)  # Keeping the last 50 results at a guess
+    @lru_cache(maxsize=100)  # Guessing cachesize that woule be about right
     def _cached_get_color(self, determiner_tuple: tuple) -> Color:
         if not self.ready:
             raise ValueError("ColorFactory is not ready")
@@ -456,19 +534,17 @@ class ColorFactory:
                 f"and configuration ({self.num_dimensions})."
             )
 
-        # Calculate colors for each dimension using exponential interpolation
-        colors_by_dimension = []
-
+        # Calculate colors for each dimension
+        colors_list = []
         for i, dimension in enumerate(self.dimensions):
-            color_for_dimension = self._calculate_color_for_dimension(
-                determiner_tuple[i], dimension
-            )
-            colors_by_dimension.append(color_for_dimension)
+            colors_list.append(dimension.get_color(determiner_tuple[i]))
 
-        # Blend colors from different dimensions
-        final_color = Color.blend(colors_by_dimension, self.blend_method)
+        # Blend the dimensions' colors into one
+        final_color = Color.blend(colors_list, self.blend_method)
         return final_color
 
+    # pylint:disable-next=pointless-string-statement
+    """
     def _calculate_color_for_dimension(self, determiner, dimension):
         if dimension.range <= 0:
             return dimension.configs[0].color
@@ -498,6 +574,7 @@ class ColorFactory:
         return Color.blend_lerp(
             gradient_min.color, gradient_max.color, blend_factor
         )
+    """
 
     @property
     def num_dimensions(self):
@@ -536,17 +613,8 @@ class ColorFactory:
         )
         for i, d in enumerate(self.dimensions):
             d: Dimension
-            lines.append(f"  Dimension {i}:")
-            lines.append(
-                f"    ready: {d.ready}; configs: {len(d.configs)}; "
-                f"min/max: {d.min}/{d.max}; range {d.range}; "
-                f"exp: {d.interpolation_exponent}"
-            )
-            for j, pt in enumerate(d.configs):
-                pt: ConfigPoint
-                lines.append(
-                    f"      ConfigPoint {j}: {pt.real}; {pt.color} ({pt.color.similar_to()})"
-                )
+            lines = lines + d.dump("  ", i, quiet=True)
+
         if not quiet:
             for line in lines:
                 print(line)
