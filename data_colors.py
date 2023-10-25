@@ -45,9 +45,7 @@ for (various x,y values with no text)
 
 import re
 import math
-from typing import Tuple
 from functools import lru_cache
-from PIL import Image, ImageDraw  # , ImageFont
 
 from color_names import COLOR_NAMES
 
@@ -439,7 +437,7 @@ class ColorFactory:
         serialized = self.dump(quiet=True)
         return hash(tuple(serialized))
 
-    def get_color(self, *determiner_tuple: Tuple[float]) -> Color:
+    def get_color(self, *determiner_tuple: tuple) -> Color:
         """Wrap _chached_get_color so can clear its lru cache if needed."""
         current_config_hash = self._get_hash()
         if current_config_hash != self._config_hash:
@@ -448,7 +446,7 @@ class ColorFactory:
         return self._cached_get_color(determiner_tuple)
 
     @lru_cache(maxsize=50)  # Keeping the last 50 results at a guess
-    def _cached_get_color(self, determiner_tuple: Tuple[float]) -> Color:
+    def _cached_get_color(self, determiner_tuple: tuple) -> Color:
         if not self.ready:
             raise ValueError("ColorFactory is not ready")
 
@@ -553,106 +551,3 @@ class ColorFactory:
             for line in lines:
                 print(line)
         return lines
-
-    def _visualize1d(self, image_size: int, orientation:str = "horizontal"):
-        """Create a bar image for 1D data, optionally vertical."""
-        # Define the image size
-        if orientation == "horizontal":
-            vertical = False
-        elif orientation == "vertical":
-            vertical = True
-        else:
-            raise ValueError("orientation must be vertical or horizontal")
-        extents = (20, image_size) if vertical else (image_size,20)
-
-        # Create a new image with a white background
-        image = Image.new("RGB", extents, "white")
-        draw = ImageDraw.Draw(image)
-
-        # Get the min and max values for x from ColorFactory's dimensions
-        dmin = self.dimensions[0].min
-        dmax = self.dimensions[0].max
-        # Calculate the step size for x
-        step = (dmax - dmin) / (image_size - 1)
-        if vertical:
-            for i in range(image_size):
-                x = dmax-i*step
-                draw.line([(0, i), (extents[1], i)], self.get_color(x))
-        else:
-            for i in range(image_size):
-                x = dmin+i*step
-                draw.line([(i, 0), (i, extents[1])], self.get_color(x))
-
-        return image
-
-    def _visualize2d(self, image_size: int) -> Image:
-        """Make a 400x400 image of 2d data."""
-        # Define the image size and canvas size
-        extents = (image_size, image_size)
-        canvas_size = (image_size, image_size)
-
-        # Create a new image with a white background
-        image = Image.new("RGB", canvas_size, "white")
-
-        # Get the min and max values for x and y from ColorFactory's dimensions
-        x_min = self.dimensions[0].min
-        x_max = self.dimensions[0].max
-        y_min = self.dimensions[1].min
-        y_max = self.dimensions[1].max
-
-        # Calculate the step size for x and y
-        x_step = (x_max - x_min) / (extents[0] - 1)
-        y_step = (y_max - y_min) / (extents[1] - 1)
-
-        # Plot the values on the 400x400 canvas
-        for i in range(extents[0]):
-            for j in range(extents[1]):
-                x = x_min + i * x_step
-                y = (
-                    y_max - j * y_step
-                )  # Inverted to match the image coordinates
-                color = self.get_color(x, y)
-                image.putpixel((i, j), color)
-        return image
-
-    def visualize(self,orientation:str="horizontal"):
-        """Make a color-spectrum image to show the current config."""
-        if not self.ready:
-            print("not ready")
-            return
-        if len(self.dimensions) == 1:
-            image = self._visualize1d(400,orientation)
-        elif len(self.dimensions) == 2:
-            image = self._visualize2d(400)
-        else:
-            print(
-                f"no visualization available for {len(self.dimensions)}-D ColorFactory"
-            )
-            return
-
-        filename = "tmp_plot.png"
-        image.save(filename)
-        print(f"Saved image as {filename}")
-
-
-def testable_factory(obj_num: int = 0) -> ColorFactory:
-    """Create a variety of ColorFactory objects, for testing & experimenting."""
-    if obj_num == 0:
-        cf = ColorFactory()
-        d1 = cf.add_dimension()
-        d1.add_config(-10, "blue")
-        d1.add_config(5, "beige")
-        d1.add_config(30, "red")
-    elif obj_num == 1:
-        cf = ColorFactory()
-        d1 = cf.add_dimension()
-        d1.add_config(-10, "blue")
-        d1.add_config(5, "beige")
-        d1.add_config(30, "red")
-        d2 = cf.add_dimension()
-        d2.add_config(0, "yellow")
-        d2.add_config(100, "seagreen")
-    else:
-        print(f"no def for {obj_num}")
-    cf.dump()
-    return cf
