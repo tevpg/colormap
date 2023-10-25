@@ -63,8 +63,8 @@ OVERLAY_BLEND = "overlay"
 RGBTuple = tuple
 
 
-class Color:
-    """A single color and its behaviours."""
+class Color(tuple):
+    """A single color and its behaviors."""
 
     # Regular expression pattern to match the rgb str format
     _rgb_pattern = re.compile(r"rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
@@ -72,19 +72,22 @@ class Color:
     # Reversed color names dict for similar_to()
     _reverse_color_names = {v: k for k, v in COLOR_NAMES.items()}
 
-    def __init__(self, color_init):
+    def __new__(cls, color_init):
         """Create the color object.
 
         Initialize from any of
             Color object
-            RGB tuple, e.g. (127,0,255)
+            RGB tuple, e.g. (127, 0, 255)
             color name str, e.g. "seagreen"
-            rgb string, e.g. "rgb(20,56,198)"
+            rgb string, e.g. "rgb(20, 56, 198)"
         """
-        rgb: RGBTuple = None
-        if isinstance(color_init, Color):
-            rgb = color_init.rgb
-        elif isinstance(color_init, RGBTuple):
+        if isinstance(color_init,Color):
+            return color_init
+
+        rgb = None
+        #if isinstance(color_init, Color):
+        #    rgb = tuple(color_init)
+        if isinstance(color_init, RGBTuple):
             if len(color_init) == 3:
                 rgb = color_init
             else:
@@ -92,37 +95,52 @@ class Color:
         elif isinstance(color_init, str):
             color_init = color_init.lower().strip()
             if color_init.startswith("rgb("):
-                rgb = self._parse_rgb_str(color_init)
+                rgb = cls._parse_rgb_str(color_init)
             elif color_init in COLOR_NAMES:
                 rgb = COLOR_NAMES[color_init]
             else:
                 raise ValueError(f"Can not get color from '{color_init}'")
         else:
-            raise ValueError("Color definition must be string or RGB tuple")
-        self._validate_rgb_tuple(rgb)
+            raise ValueError("Color definition must be a string or RGB tuple")
 
-        self.red, self.green, self.blue = rgb
+        cls._validate_rgb_tuple(rgb)
+        return super(Color, cls).__new__(cls, rgb)
 
-    @classmethod
-    def _parse_rgb_str(cls, color_init) -> RGBTuple:
+    @property
+    def red(self):
+        """Get color band from tuple."""
+        return self[0]
+
+    @property
+    def green(self):
+        """Get color band from tuple."""
+        return self[1]
+
+    @property
+    def blue(self):
+        """Get color band from tuple."""
+        return self[2]
+
+    #@property
+    #def rgb(self):
+    #    """Return rgb -- FIXME placeholder until scrub out 'rgb' use elsewhere."""
+    #    return tuple(self)
+
+    @staticmethod
+    def _validate_rgb_tuple(rgb):
+        """Test that rgb is a valid RGB tuple."""
+        if not all(0 <= c <= 255 for c in rgb):
+            raise ValueError("RGB values must be between 0 and 255")
+
+    @staticmethod
+    def _parse_rgb_str(rgb_str) -> RGBTuple:
         """Get an RGB tuple from a str like 'rgb(30,77,220)'."""
-        # Pre-compied regular expression to get the rGB bits.
-        match = cls._rgb_pattern.search(color_init)
-
+        match = Color._rgb_pattern.match(rgb_str)
         if match:
-            # Extract the red, green, and blue values as integers
-            red = int(match.group(1))
-            green = int(match.group(2))
-            blue = int(match.group(3))
-
-            # Check if the values are in the valid range (0 to 255)
-            if 0 <= red <= 255 and 0 <= green <= 255 and 0 <= blue <= 255:
-                color_tuple: RGBTuple = (red, green, blue)
-                return color_tuple
-            else:
-                raise ValueError("Color values are out of range (0-255).")
-        else:
-            raise ValueError("Invalid format in the color_init string.")
+            rgb = tuple(int(match.group(i)) for i in range(1, 4))
+            Color._validate_rgb_tuple(rgb)
+            return rgb
+        raise ValueError("Invalid RGB string format")
 
     @staticmethod
     def _validate_rgb_tuple(color_tuple: RGBTuple) -> bool:
@@ -133,21 +151,21 @@ class Color:
             raise ValueError("Color tuple must have exactly 3 elements.")
         if not all(isinstance(c, int) for c in color_tuple):
             raise TypeError("All elements of color tuple must be int.")
-        if color_tuple != Color._clamp(color_tuple):
+        if color_tuple != Color._clamp_tuple(color_tuple):
             raise ValueError(
                 "All elements in the color tuple must be 0 to 255."
             )
         return True
 
+    @staticmethod
+    def _clamp_tuple(color_tuple: RGBTuple) -> RGBTuple:
+        """Clamp the values of a color tuple to the range 0-255."""
+        return tuple(max(0, min(255, value)) for value in color_tuple)
+
     @property
     def html_color(self):
         """Return color as an HTML color str (e.g. '#07f378')."""
         return f"#{self.red:02X}{self.green:02X}{self.blue:02X}"
-
-    @property
-    def rgb(self) -> RGBTuple:
-        """Return the RGB as a tuple."""
-        return (self.red, self.green, self.blue)
 
     def luminance(self) -> float:
         """Calculate the color's luminance."""
@@ -206,106 +224,115 @@ class Color:
         return f"{closeness*100:.1f}% off of {closest_color}"
 
     @staticmethod
-    def blend(colors, blend_method=ALPHA_BLEND) -> RGBTuple:
+    def blend(colors_list: list["Color"], blend_method=ALPHA_BLEND) -> RGBTuple:
         """Blend unspecified number of colors together."""
-        if not colors:
+        if not colors_list:
             raise ValueError("The list of colors must not be empty.")
-        elif len(colors) == 1:
-            return colors[0]
 
-        result: RGBTuple = (0, 0, 0)
+        if len(colors_list) == 1:
+            return colors_list[0]
+        # Blend first two colors until only one color left
+        while len(colors_list) > 2:
+            # Reduce list by blending 1st 2 colors.
+            colors_list = [Color.blend(colors_list[:2],blend_method)] + colors_list[2:]
 
-        for color in colors:
-            if blend_method in [LERP_BLEND, ALPHA_BLEND]:
-                result = Color.blend_lerp(result, color)
-            elif blend_method == ADDITIVE_BLEND:
-                result = Color._blend_additive(result, color)
-            elif blend_method == SUBTRACTIVE_BLEND:
-                result = Color._blend_subtractive(result, color)
-            elif blend_method == DIFFERENCE_BLEND:
-                result = Color._blend_subtractive(result, color)
-            elif blend_method == MULTIPLICATIVE_BLEND:
-                result = Color._blend_multiply(result, color)
-            elif blend_method == OVERLAY_BLEND:
-                result = Color._blend_overlay(result, color)
-            else:
-                raise ValueError(f"Invalid blend method: {blend_method}")
+        # At this point, there are exactly two colors.
+        color1, color2 = colors_list[0:2]
+        if blend_method in [LERP_BLEND, ALPHA_BLEND]:
+            result = Color.blend_lerp(color1, color2)
+        elif blend_method == ADDITIVE_BLEND:
+            result = Color._blend_additive(color1, color2)
+        elif blend_method == SUBTRACTIVE_BLEND:
+            result = Color._blend_subtractive(color1, color2)
+        elif blend_method == DIFFERENCE_BLEND:
+            result = Color._blend_difference(color1, color2)
+        elif blend_method == MULTIPLICATIVE_BLEND:
+            result = Color._blend_multiply(color1, color2)
+        elif blend_method == OVERLAY_BLEND:
+            result = Color._blend_overlay(color1, color2)
+        else:
+            raise ValueError(f"Invalid blend method: {blend_method}")
 
-        return result
+        return tuple(result)
 
     @staticmethod
-    def blend_lerp(base_color, blend_color, alpha: float = 0.5) -> RGBTuple:
+    def blend_lerp(
+        base_color: "Color", blend_color: "Color", alpha: float = 0.5
+    ) -> "Color":
         """Blend two colours using linear interpolation.
 
         This seems to be the same thing as ALPHA.
         """
         alpha = max(0.0, min(1.0, alpha))  # Ensure alpha is within [0, 1]
-        base_color = Color(base_color)
-        blend_color = Color(blend_color)
-        blended_color = (
-            int(base_color.red + (blend_color.red - base_color.red) * alpha),
-            int(
-                base_color.green
-                + (blend_color.green - base_color.green) * alpha
-            ),
-            int(
-                base_color.blue + (blend_color.blue - base_color.blue) * alpha
-            ),
+        blended_color = Color(
+            (
+                int(
+                    base_color.red + (blend_color.red - base_color.red) * alpha
+                ),
+                int(
+                    base_color.green
+                    + (blend_color.green - base_color.green) * alpha
+                ),
+                int(
+                    base_color.blue
+                    + (blend_color.blue - base_color.blue) * alpha
+                ),
+            )
         )
-        return Color._clamp(blended_color)
+        return blended_color
 
     @staticmethod
     def _blend_additive(
-        base_color: RGBTuple, blend_color: RGBTuple
-    ) -> RGBTuple:
+        base_color: 'Color', blend_color: 'Color'
+    ) -> 'Color':
         """Additive blending of two RGB color tuples."""
         blended_color = (
-            min(255, base_color[0] + blend_color[0]),
-            min(255, base_color[1] + blend_color[1]),
-            min(255, base_color[2] + blend_color[2]),
+            min(255, base_color.red + blend_color.red),
+            min(255, base_color.green + blend_color.green),
+            min(255, base_color.blue + blend_color.blue),
         )
-        return Color._clamp(blended_color)
+        return Color(blended_color)
 
     @staticmethod
     def _blend_subtractive(
-        base_color: RGBTuple, blend_color: RGBTuple
-    ) -> RGBTuple:
+        base_color: 'Color', blend_color: 'Color'
+    ) -> 'Color':
         """Subtractive blending of two RGB color tuples."""
         blended_color = (
-            max(0, base_color[0] - blend_color[0]),
-            max(0, base_color[1] - blend_color[1]),
-            max(0, base_color[2] - blend_color[2]),
+            max(0, base_color.red - blend_color.red),
+            max(0, base_color.green - blend_color.green),
+            max(0, base_color.blue - blend_color.blue),
         )
-        return Color._clamp(blended_color)
+        return Color(blended_color)
 
     @staticmethod
     def _blend_difference(
-        base_color: RGBTuple, blend_color: RGBTuple
-    ) -> RGBTuple:
+        base_color: "Color", blend_color: "Color"
+    ) -> 'Color':
         """Difference blending of two RGB color tuples."""
         blended_color = (
-            abs(base_color[0] - blend_color[0]),
-            abs(base_color[1] - blend_color[1]),
-            abs(base_color[2] - blend_color[2]),
+            abs(base_color.red - blend_color.red),
+            abs(base_color.green - blend_color.green),
+            abs(base_color.blue - blend_color.blue),
         )
-        return Color._clamp(blended_color)
+        return Color(blended_color)
 
     @staticmethod
     def _blend_multiply(
-        base_color: RGBTuple, blend_color: RGBTuple
-    ) -> RGBTuple:
+        base_color: 'Color', blend_color: 'Color'
+    ) -> 'Color':
         """Multiplicative blending of two RGB color tuples."""
         blended_color = (
-            (base_color[0] * blend_color[0]) // 255,
-            (base_color[1] * blend_color[1]) // 255,
-            (base_color[2] * blend_color[2]) // 255,
+            (base_color.red * blend_color.red) // 255,
+            (base_color.green * blend_color.green) // 255,
+            (base_color.blue * blend_color.blue) // 255,
         )
-        return Color._clamp(blended_color)
+        return Color(blended_color)
 
     @staticmethod
     def _blend_overlay(
-        base_color: RGBTuple, blend_color: RGBTuple
-    ) -> RGBTuple:
+        base_color: 'Color', blend_color: 'Color'
+    ) -> 'Color':
         """Overlay blending of two RGB color tuples."""
 
         def overlay_channel(base, blend):
@@ -319,12 +346,7 @@ class Color:
             overlay_channel(base_color[1], blend_color[1]),
             overlay_channel(base_color[2], blend_color[2]),
         )
-        return Color._clamp(blended_color)
-
-    @staticmethod
-    def _clamp(color_tuple: RGBTuple) -> RGBTuple:
-        """Clamp the values of a color tuple to the range 0-255."""
-        return tuple(max(0, min(255, value)) for value in color_tuple)
+        return Color(blended_color)
 
 
 class ConfigPoint(float):
@@ -532,41 +554,42 @@ class ColorFactory:
                 print(line)
         return lines
 
-    def _visualize1d(self, image_width: int, vertical: bool = False):
+    def _visualize1d(self, image_size: int, orientation:str = "horizontal"):
         """Create a bar image for 1D data, optionally vertical."""
         # Define the image size
-        image_size = (image_width, 20) if not vertical else (20, image_width)
+        if orientation == "horizontal":
+            vertical = False
+        elif orientation == "vertical":
+            vertical = True
+        else:
+            raise ValueError("orientation must be vertical or horizontal")
+        extents = (20, image_size) if vertical else (image_size,20)
 
         # Create a new image with a white background
-        image = Image.new("RGB", image_size, "white")
+        image = Image.new("RGB", extents, "white")
         draw = ImageDraw.Draw(image)
 
         # Get the min and max values for x from ColorFactory's dimensions
-        x_min = self.dimensions[0].min
-        x_max = self.dimensions[0].max
-
+        dmin = self.dimensions[0].min
+        dmax = self.dimensions[0].max
         # Calculate the step size for x
-        x_step = (x_max - x_min) / (image_size[0] - 1)
-
-        # Iterate over each line, horizontally or vertically
-        for i in range(image_size[0]):
-            x = x_min + i * x_step
-            color = self.get_color(x)
-
-            if vertical:
-                # Draw a vertical line with the same color
-                draw.line([(0, i), (image_size[1], i)], color)
-            else:
-                # Draw a horizontal line with the same color
-                draw.line([(i, 0), (i, image_size[1])], color)
+        step = (dmax - dmin) / (image_size - 1)
+        if vertical:
+            for i in range(image_size):
+                x = dmax-i*step
+                draw.line([(0, i), (extents[1], i)], self.get_color(x))
+        else:
+            for i in range(image_size):
+                x = dmin+i*step
+                draw.line([(i, 0), (i, extents[1])], self.get_color(x))
 
         return image
 
-    def _visualize2d(self, image_width: int) -> Image:
+    def _visualize2d(self, image_size: int) -> Image:
         """Make a 400x400 image of 2d data."""
         # Define the image size and canvas size
-        image_size = (image_width, image_width)
-        canvas_size = (image_width, image_width)
+        extents = (image_size, image_size)
+        canvas_size = (image_size, image_size)
 
         # Create a new image with a white background
         image = Image.new("RGB", canvas_size, "white")
@@ -578,12 +601,12 @@ class ColorFactory:
         y_max = self.dimensions[1].max
 
         # Calculate the step size for x and y
-        x_step = (x_max - x_min) / (image_size[0] - 1)
-        y_step = (y_max - y_min) / (image_size[1] - 1)
+        x_step = (x_max - x_min) / (extents[0] - 1)
+        y_step = (y_max - y_min) / (extents[1] - 1)
 
         # Plot the values on the 400x400 canvas
-        for i in range(image_size[0]):
-            for j in range(image_size[1]):
+        for i in range(extents[0]):
+            for j in range(extents[1]):
                 x = x_min + i * x_step
                 y = (
                     y_max - j * y_step
@@ -592,13 +615,13 @@ class ColorFactory:
                 image.putpixel((i, j), color)
         return image
 
-    def visualize(self):
+    def visualize(self,orientation:str="horizontal"):
         """Make a color-spectrum image to show the current config."""
         if not self.ready:
             print("not ready")
             return
         if len(self.dimensions) == 1:
-            image = self._visualize1d(400)
+            image = self._visualize1d(400,orientation)
         elif len(self.dimensions) == 2:
             image = self._visualize2d(400)
         else:
