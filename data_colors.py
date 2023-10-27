@@ -91,6 +91,8 @@ class Color(tuple):
             color_init = color_init.lower().strip()
             if color_init.startswith("rgb("):
                 rgb = cls._parse_rgb_str(color_init)
+            elif color_init.startswith("#"):
+                rgb = cls._parse_html_str(color_init)
             elif color_init in COLOR_NAMES:
                 rgb = COLOR_NAMES[color_init]
             else:
@@ -126,6 +128,21 @@ class Color(tuple):
         """Test that rgb is a valid RGB tuple."""
         if not all(0 <= c <= 255 for c in rgb):
             raise ValueError("RGB values must be between 0 and 255")
+
+    @staticmethod
+    def _parse_html_str(html_str: str) -> tuple:
+        """Parse R,G,B from an html color str (e.g. "#ffe720").
+
+        Precondition: already know it starts with "#".
+        """
+        try:
+            r = int(html_str[1:3], 16)
+            g = int(html_str[3:5], 16)
+            b = int(html_str[5:7], 16)
+        except ValueError:
+            raise ValueError("Invalid HTML color string.")
+
+        return (r, g, b)
 
     @staticmethod
     def _parse_rgb_str(rgb_str) -> tuple:
@@ -166,6 +183,15 @@ class Color(tuple):
         """Calculate the color's luminance."""
         luminance = 0.299 * self.red + 0.587 * self.green + 0.114 * self.blue
         return luminance
+
+    def css_bg(self) -> str:
+        """Make a CSS background color style string component."""
+        return f"background-color:{self.html_color};"
+
+    def css_fg_bg(self) -> str:
+        """Make CSS style background color component with contrasting text color."""
+        fg = "black" if self.luminance() >= 0.5 else "white"
+        return f"color:{fg};background-color:{self.html_color};"
 
     def __str__(self):
         """Str representation.
@@ -258,7 +284,7 @@ class Color(tuple):
         else:
             raise ValueError(f"Invalid blend method: {blend_method}")
 
-        return tuple(result)
+        return result
 
     @staticmethod
     def blend_lerp(
@@ -284,6 +310,7 @@ class Color(tuple):
                 ),
             )
         )
+        ##print(f"here in blend_lerp, {type(blended_color)=}")
         return blended_color
 
     @staticmethod
@@ -379,9 +406,6 @@ class ConfigPoint(float):
         :index, if present, is just a courtesy number to add to the text
         :indent is what to put at the start of each line (e.g. "  ")
         :quiet, if True, suppresses printing.
-
-        This is used for human reading and also as input to
-        hash function for configuration change detection.
         """
         index = "" if index is None else index
         lines = [
@@ -472,6 +496,18 @@ class Dimension(int):
             gradient_min.color, gradient_max.color, blend_factor
         )
 
+    def css_bg(self, determiner: float) -> str:
+        """Make a CSS background color style string component."""
+        bg = self.get_color(determiner)
+        bgcol = Color(bg)
+        return f"background-color:{bgcol.html_color};"
+
+    def css_fg_bg(self, determiner: float) -> str:
+        """Make CSS style background color component with contrasting text color."""
+        bg = self.get_color(determiner)
+        fg = "black" if bg.luminance() >= 0.5 else "white"
+        return f"color:{fg};background-color:{bg.html_color};"
+
     def dump(
         self, indent: str = "", index: int = None, quiet: bool = False
     ) -> list[str]:
@@ -483,8 +519,6 @@ class Dimension(int):
         :indent is what to put at the start of each line (e.g. "  ")
         :quiet, if True, suppresses printing.
 
-        This is used for human reading and also as input to
-        hash function for change detection of a Dimension.
         """
         index = "" if index is None else index
         lines = []
@@ -519,9 +553,8 @@ class ColorFactory:
         return d
 
     def _get_hash(self):
-        """Get a hash value for the ColorFactory (for change detection)."""
-        serialized = self.dump(quiet=True)
-        return hash(tuple(serialized))
+        """Get a hash of the ColorFactory config (for change detection)."""
+        return hash(str(self.unload()))
 
     def get_color(self, *determiner_tuple: tuple) -> Color:
         """Wrap _chached_get_color so can clear its lru cache if needed."""
@@ -565,13 +598,41 @@ class ColorFactory:
 
     def css_bg(self, determiner: tuple) -> str:
         """Make a CSS background color style string component."""
-        return f"background-color:{self.get_color(determiner).html_color};"
+        bg = self.get_color(*determiner)
+        #print(f"{(type(bg))=}")
+        bgcol = Color(bg)
+        return f"background-color:{bgcol.html_color};"
 
     def css_fg_bg(self, determiner: tuple) -> str:
         """Make CSS style background color component with contrasting text color."""
-        bg = self.get_color(determiner)
+        bg = self.get_color(*determiner)
         fg = "black" if bg.luminance() >= 0.5 else "white"
         return f"color:{fg};background-color:{bg.html_color};"
+
+    def unload(self) -> list:
+        """Unload the full factory configuration info (only) into simple list.
+
+        This list could be used to load a factory.
+
+        Structure:
+        returns: [blend_method, dimension_list, dimension_list..]
+            dimension_list: [interpolation_exponent, configlist]
+            config_list: [ConfigPoint, ConfigPoint..]
+            ConfigPoint: [value, color_as_html_hex_string]
+
+        Notes for later:  to use this as a way to save configurations...
+        - str() can be saved, then turned back into this structure using eval()
+        """
+        dimlist = []
+        for dim in self.dimensions:
+            conlist = []
+            dim:Dimension
+            for con in dim.configs:
+                conlist.append([con.real,con.color.html_color])
+            thisdim = [dim.interpolation_exponent,conlist]
+            dimlist.append(thisdim)
+        faclist = [self.blend_method,dimlist]
+        return faclist
 
     def dump(self, quiet: bool = False) -> list[str]:
         """Dump the contents of the ColorFactory.

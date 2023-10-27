@@ -1,4 +1,9 @@
+"""Create an html table showing shades of a 2d ColorFactory."""
+
 import data_colors as dc
+
+##import data_color_extras as extras
+
 
 class html_thing:
     def __init__(self) -> None:
@@ -11,67 +16,39 @@ class html_thing:
     def add(self, text_to_add):
         self.text += text_to_add
 
+    @staticmethod
+    def html_bottom():
+        return "</body></html>"
 
-def make_html_color_table(
-    factory: dc.ColorFactory,
-    title: str = "",
-    x_label: str = "",
-    y_label: str = "",
-) -> str:
-    """Create html color table for cf and return it as a string."""
+    @staticmethod
+    def html_top(cell_wid: int = 26):
+        return """Content-type: text/html\n\n
+            <!DOCTYPE html>
+            <html>
+            <head>
 
+            </head>
+            <body>
+    """
 
-    # Define the dimensions of the table
-    num_rows = 20
-    num_columns = 20
-    cell_width = 26  # Adjust this value for your desired cell width in pixels
-    table_width = cell_width * num_columns
-
-    x:dc.Dimension = factory.dimensions[0]
-    y:dc.Dimension = factory.dimensions[1]
-    if not x_label:
-        x_label = x.configs[1].color.similar_to()
-    if not y_label:
-        x_label = y.configs[1].color.similar_to()
-    if not title:
-        title = f"Plot of {x_label} and {y_label}"
-
-    x_min = x.min
-    x_max = x.max
-    y_min = y.min
-    y_max = y.max
-
-    x_step = x.range/num_columns
-    y_step = y.range / num_rows
-
-    html = html_thing()
-
-    # Generate the HTML code
-    html.add(
-        f"""Content-type: text/html
-
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
+    @staticmethod
+    def style_sheet(cell_wid: int = 25) -> str:
+        """Return a style sheet for the table."""
+        return f"""<style>
+            html {{
+                font-family: sans-serif;
+            }}
             table {{
                 border-collapse: collapse;
-                width: {table_width};
+                font-size: 0.8rem;
             }}
             table, th, td {{
                 border: none;
             }}
             th, td {{
-                width: {cell_width}px;
-                height: {cell_width}px;
+                width: {cell_wid}px;
+                height: {cell_wid}px;
                 padding: 0;
-            }}
-            .vertical-text {{
-                white-space: nowrap;
-                transform: rotate(-90deg);
-            }}
-            .narrow-first-column {{
-                width: 25px;  /* Set your desired width here */
             }}
             .rotate {{
                 text-align: center;
@@ -88,38 +65,68 @@ def make_html_color_table(
                         margin-left: -10em;
                         margin-right: -10em;
             }}
-            th:first-child, td:first-child {{
-                border-left: none;
-                border-right: none;
-                border-top: none;
-                border-bottom: none;
-            }}
-            th:last-child, td:last-child {{
-                border-left: none;
-                border-right: none;
-                border-top: none;
-                border-bottom: none;
-            }}
-            tr:first-child th {{
-                border-left: none;
-                border-right: none;
-                border-top: none;
-                border-bottom: none;
-            }}
-            tr:last-child th {{
-                border-left: none;
-                border-right: none;
-                border-top: none;
-                border-bottom: none;
-            }}
-        </style>
-    </head>
-    <body>
-    """
-    )
 
+            table {{border:1px solid #000;}}
+            tr {{border-top:1px solid #000;}}
+            tr + tr {{border-top:1px solid white;}}
+            td {{border-left:1px solid #000;}}
+            td + td {{border-left:1px solid white;}}
+
+            </style>"""
+
+
+def make_html_color_table(
+    factory: dc.ColorFactory,
+    title: str = "",
+    x_label: str = "",
+    y_label: str = "",
+    num_rows: int = 20,
+    num_columns: int = 20,
+) -> str:
+    """Create html color table for cf and return it as a string."""
+
+    def top_color(dim: dc.Dimension) -> str:
+        """Get html color of greatest ConfigPoint in this dimension."""
+        clr: dc.Color = dim.configs[-1].color
+        return clr.html_color
+
+    def axis_label(dim: dc.Dimension) -> str:
+        """Make a default label for this dimension."""
+        lab = " => ".join([p.color.similar_to() for p in dim.configs])
+        if dim.interpolation_exponent != 1:
+            lab = f"{lab}  exp={dim.interpolation_exponent}"
+        return lab
+
+    def cell(factory: dc.ColorFactory, x_index, y_index) -> str:
+        """Return a coloured html table cell."""
+        c = factory.get_color(x_index, y_index).html_color
+        return (
+            f"<td style={factory.css_bg((x_index,y_index))} title='{c}'></td>"
+        )
+
+    x: dc.Dimension = factory.dimensions[0]
+    y: dc.Dimension = factory.dimensions[1]
+    if not x_label:
+        x_label = axis_label(x)
+    if not y_label:
+        y_label = axis_label(y)
+    if not title:
+        title = f"Blend method: {factory.blend_method}"
+
+    x_min = x.min
+    x_max = x.max
+    y_min = y.min
+    y_max = y.max
+
+    x_step = x.range / (num_columns - 1)
+    y_step = y.range / (num_rows - 1)
+
+    html = html_thing()
+
+    # Generate the HTML code
+    ##html.add(html_thing.style_sheet(cell_width))
     html.add(
-        f"""    <table>
+        f"""    <table> {html_thing.style_sheet()}
             <tbody>
             <tr>
                 <td colspan="{num_columns+1}" style="text-align: center">{title}</td>
@@ -130,18 +137,19 @@ def make_html_color_table(
     # Generate the data rows
     # top row (includes y_max)
 
-    def one_cell(cf:dc.ColorFactory,x_index,y_index) -> str:
-        """Return a style for this cell."""
-        col = cf.css_bg((x_index,y_index))
-        return
     y_index = y.max
     rownum = 1
     html.add("            <tr>")
-    html.add(f"               <td>{y_max}</td>")
-    for col in range(num_columns):
-        html.add(f"<td style='background-color:grey'>{rownum}</td>")
+    html.add(
+        f"               <td style='{y.css_fg_bg(y_max)}'>{round(y_max)}</td>"
+    )
+    x_index = x_min
+    for _ in range(num_columns):
+        html.add(cell(factory, x_index, y_index))
+        x_index += x_step
     html.add("</tr>\n")
     rownum += 1
+    y_index -= y_step
 
     html.add(
         f"""
@@ -153,47 +161,87 @@ def make_html_color_table(
 
     while rownum < num_rows:
         html.add("            <tr>")
+        x_index = x_min
         for _ in range(num_columns):
-            html.add(f"<td style='background-color:grey'>{rownum}</td>")
+            html.add(cell(factory, x_index, y_index))
+            x_index += x_step
         html.add("</tr>\n")
         rownum += 1
+        y_index -= y_step
+
     # bottom row (includes y_min)
     html.add("            <tr>")
-    html.add(f"               <td>{y_min}</td>")
-    for col in range(num_columns):
-        html.add(f"<td style='background-color:grey'>{rownum}</td>")
+    html.add(
+        f"               <td style='{y.css_fg_bg(y_min)}'>{round(y_min)}</td>"
+    )
+    x_index = x_min
+    for _ in range(num_columns):
+        html.add(cell(factory, x_index, y_index))
+        x_index += x_step
     html.add("</tr>\n")
 
     # label row at the bottom
+    bottom_row_merge = 2
     html.add("<tr>")
     html.add("<td></td>")
-    html.add(f'<td colspan=5 style="text-align: left">{x_min}</td>')
     html.add(
-        f'<td colspan={num_columns - 5 - 5} style="text-align: center">{x_label}</td>'
+        f'<td colspan={bottom_row_merge} style="text-align: left;{x.css_fg_bg(x_min)};">{round(x_min)}</td>'
     )
-    html.add(f'<td colspan=5 style="text-align: right">{x_max}</td>')
+    html.add(
+        f'<td colspan={num_columns - 2 * bottom_row_merge} style="text-align: center">{x_label}</td>'
+    )
+    html.add(
+        f'<td colspan={bottom_row_merge} style="text-align: right; {x.css_fg_bg(x_max)};">{round(x_max)}</td>'
+    )
     html.add("</tr>")
 
     # Close the HTML
     html.add(
         """        </tbody>
         </table>
-    </body>
-    </html>
     """
     )
+    return html.text
 
-    # Print the HTML, or you can save it to a file manually
-    html.print()
 
 if __name__ == "__main__":
+    rows = 15
+    columns = 15
+    cell_width = 30
 
-    cf = dc.ColorFactory(dc.MULTIPLICATIVE_BLEND)
-    d = cf.add_dimension()
-    d.add_config(0, "white")
-    d.add_config(100, "royalblue")
-    d = cf.add_dimension()
-    d.add_config(0, "white")
-    d.add_config(100, "tomato")
+    cf = dc.ColorFactory()  # dc.MULTIPLICATIVE_BLEND)
+    d = cf.add_dimension(1)
+    d.add_config(0, "beige")
+    d.add_config(50, "crimson")  # (100,255,255))
+    d = cf.add_dimension(1)
+    d.add_config(0, "beige")
+    d.add_config(150, "blue")#"#4343d3")#"royalblue")
 
-    print(make_html_color_table(cf))
+    print(html_thing.html_top(cell_wid=cell_width))
+    for blend in [
+        dc.MULTIPLICATIVE_BLEND,
+                dc.ALPHA_BLEND,
+                dc.SUBTRACTIVE_BLEND,
+                dc.DIFFERENCE_BLEND,
+                dc.OVERLAY_BLEND,
+                dc.ADDITIVE_BLEND,
+    ]:
+        cf.blend_method = blend
+        print(
+            make_html_color_table(
+                cf,
+                title="Legend for activity chart",
+                x_label="Busy (in+out)",
+                y_label="Full (bikes present)",
+                num_columns=columns,
+                num_rows=rows,
+            )
+        )
+
+    print(html_thing.html_bottom)
+
+    dump = cf.dump(quiet=True)
+    print("\n\n<pre>")
+    for l in dump:
+       print(l)
+    print("</pre>")

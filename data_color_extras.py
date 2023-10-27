@@ -1,6 +1,7 @@
 """Extra bits & helpers for data_colors and ColorFactory."""
 
 from PIL import Image, ImageDraw
+
 from data_colors import ColorFactory
 
 def visualize_dimension(
@@ -136,3 +137,4 @@ def testable_factory(obj_num: int = 0) -> ColorFactory:
         print(f"no def for {obj_num}")
     cf.dump()
     return cf
+
