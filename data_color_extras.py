@@ -1,8 +1,8 @@
-"""Extra bits & helpers for data_colors and ColorFactory."""
+"""Extra bits & helpers for data_colors and MultiDimension."""
 
 from PIL import Image, ImageDraw
 
-from data_colors import ColorFactory
+from data_colors import MultiDimension
 
 def visualize_dimension(
     dimension, image_size: tuple, orientation: str = "horizontal"
@@ -23,7 +23,7 @@ def visualize_dimension(
     image = Image.new("RGB", extents, "white")
     draw = ImageDraw.Draw(image)
 
-    # Get the min and max values for x from ColorFactory's dimensions
+    # Get the min and max values for x from MultiDimension's dimensions
     dmin = dimension.min
     dmax = dimension.max
     # Calculate the step size for x
@@ -48,7 +48,7 @@ def _visualize2d(factory, image_size: tuple) -> Image:
     # Create a new image with a white background
     image = Image.new("RGB", image_size, "white")
 
-    # Get the min and max values for x and y from ColorFactory's dimensions
+    # Get the min and max values for x and y from MultiDimension's dimensions
     x_min = factory.dimensions[0].min
     x_max = factory.dimensions[0].max
     y_min = factory.dimensions[1].min
@@ -68,7 +68,7 @@ def _visualize2d(factory, image_size: tuple) -> Image:
     return image
 
 
-def visualize(factory: ColorFactory, orientation: str = "horizontal"):
+def visualize(factory: MultiDimension, orientation: str = "horizontal"):
     """Make a color-spectrum image to show the current config."""
     if not factory.ready:
         print("not ready")
@@ -99,7 +99,7 @@ def visualize(factory: ColorFactory, orientation: str = "horizontal"):
 
     else:
         print(
-            f"no visualization available for {len(factory.dimensions)}-D ColorFactory"
+            f"no visualization available for {len(factory.dimensions)}-D MultiDimension"
         )
         return
 
@@ -108,16 +108,16 @@ def visualize(factory: ColorFactory, orientation: str = "horizontal"):
     print(f"Saved image as {filename}")
 
 
-def testable_factory(obj_num: int = 0) -> ColorFactory:
-    """Create a variety of ColorFactory objects, for testing & experimenting."""
+def testable_factory(obj_num: int = 0) -> MultiDimension:
+    """Create a variety of MultiDimension objects, for testing & experimenting."""
     if obj_num == 0:
-        cf = ColorFactory()
+        cf = MultiDimension()
         d1 = cf.add_dimension()
         d1.add_config(-10, "blue")
         d1.add_config(5, "beige")
         d1.add_config(30, "red")
     elif obj_num == 1:
-        cf = ColorFactory()
+        cf = MultiDimension()
         d1 = cf.add_dimension()
         d1.add_config(-10, "blue")
         d1.add_config(5, "beige")
@@ -126,7 +126,7 @@ def testable_factory(obj_num: int = 0) -> ColorFactory:
         d2.add_config(0, "yellow")
         d2.add_config(100, "seagreen")
     elif obj_num == 2:
-        cf = ColorFactory()
+        cf = MultiDimension()
         d1 = cf.add_dimension()
         d1.add_config(0, "white")
         d1.add_config(100, "red")

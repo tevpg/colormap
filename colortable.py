@@ -1,4 +1,4 @@
-"""Create an html table showing shades of a 2d ColorFactory."""
+"""Create an html table showing shades of a 2d MultiDimension."""
 
 import data_colors as dc
 
@@ -76,7 +76,7 @@ class html_thing:
 
 
 def make_html_color_table(
-    factory: dc.ColorFactory,
+    factory: dc.MultiDimension,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
@@ -86,7 +86,7 @@ def make_html_color_table(
     """Create html color table for cf and return it as a string."""
 
     def top_color(dim: dc.Dimension) -> str:
-        """Get html color of greatest ConfigPoint in this dimension."""
+        """Get html color of greatest MappingPoint in this dimension."""
         clr: dc.Color = dim.configs[-1].color
         return clr.html_color
 
@@ -97,7 +97,7 @@ def make_html_color_table(
             lab = f"{lab}  exp={dim.interpolation_exponent}"
         return lab
 
-    def cell(factory: dc.ColorFactory, x_index, y_index) -> str:
+    def cell(factory: dc.MultiDimension, x_index, y_index) -> str:
         """Return a coloured html table cell."""
         c = factory.get_color(x_index, y_index).html_color
         return (
@@ -205,28 +205,28 @@ def make_html_color_table(
 
 
 if __name__ == "__main__":
-    rows = 15
-    columns = 15
+    rows = 30
+    columns = 30
     cell_width = 30
 
-    cf = dc.ColorFactory()  # dc.MULTIPLICATIVE_BLEND)
+    cf = dc.MultiDimension()  # dc.BLEND_MULTIPLICATIVE)
     d = cf.add_dimension(1)
     d.add_config(0, "white")
-    d.add_config(50, "crimson")  # (100,255,255))
+    d.add_config(50, "magenta")  # (100,255,255))
     d = cf.add_dimension(0.67)
     d.add_config(0, "white")
-    d.add_config(100, "blue")  # "#4343d3")#"royalblue")
+    d.add_config(100, "cyan")  # "#4343d3")#"royalblue")
 
     print(html_thing.html_top(cell_wid=cell_width))
     for blend in [
-        dc.MULTIPLICATIVE_BLEND,
-        dc.MIN_BLEND,
-        dc.MAX_BLEND,
-        dc.ALPHA_BLEND,
-        dc.SUBTRACTIVE_BLEND,
-        dc.DIFFERENCE_BLEND,
-        dc.OVERLAY_BLEND,
-        dc.ADDITIVE_BLEND,
+        dc.BLEND_MULTIPLICATIVE,
+        dc.BLEND_MIN,
+        dc.BLEND_MAX,
+        dc.BLEND_ALPHA,
+        dc.BLEND_SUBTRACTIVE,
+        dc.BLEND_DIFFERENCE,
+        dc.BLEND_OVERLAY,
+        dc.BLEND_ADDITIVE,
     ]:
         cf.blend_method = blend
         print(

@@ -8,24 +8,29 @@ Conceptually, there is a
 - configuration space: configuration for how the data ranges are
     converted, how the colours are combined, etc
 
-ColorFactory is the color factory. It exposes methods to configure the factory
-and get a color based on dataspace parameters.
+A Dimension is a one-dimensional color factory.  It exposes methods to configure
+the dimension's dataspace to colorspace, and various methods to return a color
+for a particular data parameter (determiner).
+
+MultiDimension is the 2+D color factory. It is made up of one or more Dimensions
+and includes a parameter to control how the Dimensions' colors are blended.
+Its methods for data->color conversions are about the same as for a single Dimension.
 
 Each dataspace dimension determines a single color (dimension); when there
 are multiple dimensions the resulting colors are then blended using any of
 several blend methods.
 
-ColorFactory is defined by the color blending method and one or more config dimensions
+MultiDimension is defined by the color blending method and one or more config dimensions
 Each Dimension is defined by the interpolation_exponent of the relation between the
 data parameter and the colorspace color range, and one or more ConfigPoints.
-A ConfigPoint relates a single data value in one dimension to a single output color.
-A Dimension with only one ConfigPoint simply always produces that color.
+A MappingPoint relates a single data value in one dimension to a single output color.
+A Dimension with only one MappingPoint simply always produces that color.
 A Dimension with multiple ConfigPoints will interpolate colors along gradiants
 defined by numerically adjacent ConfigPoints.  Out of range data values are
 clamped to the min/max data values of the available ConfigPoints.
 
 Example use:
-factory = ColorFactory(LERP)
+factory = MultiDimension(LERP)
 d1 = factory.add_dimension(interpolation_exponent=1)
 d2 = factory.add_dimension(interpolation_exponent=0.5)
 d1.add_config(-10,'blue')
@@ -49,15 +54,15 @@ from functools import lru_cache
 
 from color_names import COLOR_NAMES
 
-LERP_BLEND = "lerp"  # linear interpolation
-ALPHA_BLEND = LERP_BLEND
-ADDITIVE_BLEND = "additive"
-SUBTRACTIVE_BLEND = "subtractive"
-DIFFERENCE_BLEND = "difference"
-MULTIPLICATIVE_BLEND = "multiplicative"
-OVERLAY_BLEND = "overlay"
-MIN_BLEND = "min"
-MAX_BLEND = "max"
+BLEND_LERP = "lerp"  # linear interpolation
+BLEND_ALPHA = BLEND_LERP
+BLEND_ADDITIVE = "additive"
+BLEND_SUBTRACTIVE = "subtractive"
+BLEND_DIFFERENCE = "difference"
+BLEND_MULTIPLICATIVE = "multiplicative"
+BLEND_OVERLAY = "overlay"
+BLEND_MIN = "min"
+BLEND_MAX = "max"
 
 class Color(tuple):
     """A single color and its behaviors."""
@@ -254,7 +259,7 @@ class Color(tuple):
         return Color(Color._clamp_tuple((r,g,b)))
 
     @staticmethod
-    def blend(colors_list: list["Color"], blend_method=ALPHA_BLEND) -> tuple:
+    def blend(colors_list: list["Color"], blend_method=BLEND_ALPHA) -> tuple:
         """Blend unspecified number of colors together."""
         if not colors_list:
             raise ValueError("The list of colors must not be empty.")
@@ -270,21 +275,21 @@ class Color(tuple):
 
         # At this point, there are exactly two colors.
         color1, color2 = colors_list[0:2]
-        if blend_method == MULTIPLICATIVE_BLEND:
+        if blend_method == BLEND_MULTIPLICATIVE:
             result = Color._blend_multiply(color1, color2)
-        elif blend_method in [LERP_BLEND, ALPHA_BLEND]:
+        elif blend_method in [BLEND_LERP, BLEND_ALPHA]:
             result = Color.blend_lerp(color1, color2)
-        elif blend_method == ADDITIVE_BLEND:
+        elif blend_method == BLEND_ADDITIVE:
             result = Color._blend_additive(color1, color2)
-        elif blend_method == SUBTRACTIVE_BLEND:
+        elif blend_method == BLEND_SUBTRACTIVE:
             result = Color._blend_subtractive(color1, color2)
-        elif blend_method == DIFFERENCE_BLEND:
+        elif blend_method == BLEND_DIFFERENCE:
             result = Color._blend_difference(color1, color2)
-        elif blend_method == MIN_BLEND:
+        elif blend_method == BLEND_MIN:
             result = Color._blend_min(color1, color2)
-        elif blend_method == MAX_BLEND:
+        elif blend_method == BLEND_MAX:
             result = Color._blend_max(color1, color2)
-        elif blend_method == OVERLAY_BLEND:
+        elif blend_method == BLEND_OVERLAY:
             result = Color._blend_overlay(color1, color2)
         else:
             raise ValueError(f"Invalid blend method: {blend_method}")
@@ -400,7 +405,7 @@ class Color(tuple):
         return Color(blended_color)
 
 
-class ConfigPoint(float):
+class MappingPoint(float):
     """A single dataspace point to color definition.
 
     Each is essentially a value point (e.g. 37.6) and a Color
@@ -409,7 +414,7 @@ class ConfigPoint(float):
 
     def __new__(cls, determiner, color):
         """Create new float object for the instance."""
-        instance = super(ConfigPoint, cls).__new__(cls, determiner)
+        instance = super(MappingPoint, cls).__new__(cls, determiner)
         instance.color = Color(color)
         if not instance.color:
             raise ValueError("Invalid color")
@@ -417,14 +422,14 @@ class ConfigPoint(float):
 
     def __eq__(self, other):
         """Test for equality: both value and color."""
-        if isinstance(other, ConfigPoint):
+        if isinstance(other, MappingPoint):
             return (self.real == other.real) and (self.color == other.color)
         return False
 
     def dump(
         self, indent: str = "", index: int = None, quiet: bool = False
     ) -> list[str]:
-        """Dump the contents of the ConfigPoint as readable text.
+        """Dump the contents of the MappingPoint as readable text.
 
         Returns the contents as a list of strings (lines) and by default, prints.
 
@@ -434,7 +439,7 @@ class ConfigPoint(float):
         """
         index = "" if index is None else index
         lines = [
-            f"{indent}ConfigPoint {index}:  {self.real:6.2f};  "
+            f"{indent}MappingPoint {index}:  {self.real:6.2f};  "
             f"{str(self.color):16s} --> {self.color.similar_to()}"
         ]
         if not quiet:
@@ -443,7 +448,7 @@ class ConfigPoint(float):
         return lines
 
 
-class Dimension(int):
+class Dimension:
     """Dimension obects handle all the mappings for one data dimension.
 
     E.g. x, or y.  It has a collection of ConfigPoints and the exponent
@@ -451,17 +456,7 @@ class Dimension(int):
     Higher exponent (>1) emphasizes small differences at the top end of the
     range; low exponent (<1) emphasizes small differences at the bottom
     of the range.
-
-    The int value is simply an id.
     """
-
-    _current_value = 0
-
-    def __new__(cls, interpolation_exponent: float = 1):
-        """Create new instance."""
-        instance = super(Dimension, cls).__new__(cls, cls._current_value)
-        cls._current_value += 1
-        return instance
 
     def __init__(self, interpolation_exponent: float = 1):
         """Set initial values for Dimension properties."""
@@ -475,13 +470,13 @@ class Dimension(int):
         self.range = None
 
     def add_config(self, determiner: float, color: str) -> None:
-        """Add a ConfigPoint to this dimension."""
-        pt = ConfigPoint(determiner, color)
+        """Add a MappingPoint to this dimension."""
+        pt = MappingPoint(determiner, color)
         if pt is None:
             raise ValueError("Bad determiner of color")
         if pt.real in [cp.real for cp in self.configs]:
             raise ValueError(
-                f"ConfigPoint with determiner {pt} already exists"
+                f"MappingPoint with determiner {pt} already exists"
             )
         self.configs.append(pt)
         self.configs.sort()
@@ -556,7 +551,7 @@ class Dimension(int):
             f"interpolation_exponent: {self.interpolation_exponent}"
         )
         for j, pt in enumerate(self.configs):
-            pt: ConfigPoint
+            pt: MappingPoint
             lines = lines + pt.dump("      ", j, quiet=True)
         if not quiet:
             for line in lines:
@@ -564,23 +559,23 @@ class Dimension(int):
         return lines
 
 
-class ColorFactory:
-    """ColorFactory looks after n-dimensional mappings their colors."""
+class MultiDimension:
+    """MultiDimension looks after n-dimensional mappings of colors."""
 
-    def __init__(self, blend_method: str = ALPHA_BLEND):
-        """Initialize empty ColorFactory (not much to it)."""
+    def __init__(self, blend_method: str = BLEND_ALPHA):
+        """Initialize empty MultiDimension (not much to it)."""
         self.blend_method = blend_method
         self.dimensions = []  # Each is a Dimension
         self._config_hash = 0
 
     def add_dimension(self, interpolation_exponent: float = 1) -> Dimension:
-        """Add an empty Dimension to the ColorFactory."""
+        """Add an empty Dimension to the MultiDimension."""
         d = Dimension(interpolation_exponent)
         self.dimensions.append(d)
         return d
 
     def _get_hash(self):
-        """Get a hash of the ColorFactory config (for change detection)."""
+        """Get a hash of the MultiDimension config (for change detection)."""
         return hash(str(self.unload()))
 
     def get_color(self, *determiner_tuple: tuple) -> Color:
@@ -594,7 +589,7 @@ class ColorFactory:
     @lru_cache(maxsize=100)  # Guessing cachesize that woule be about right
     def _cached_get_color(self, determiner_tuple: tuple) -> Color:
         if not self.ready:
-            raise ValueError("ColorFactory is not ready")
+            raise ValueError("MultiDimension is not ready")
 
         if len(determiner_tuple) != self.num_dimensions:
             raise ValueError(
@@ -613,12 +608,12 @@ class ColorFactory:
 
     @property
     def num_dimensions(self):
-        """Count number of dimensions in this configuration."""
+        """Count number of dimensions."""
         return len(self.dimensions)
 
     @property
     def ready(self):
-        """Test if the ColorFactory has enough configuration to work."""
+        """Test if the MultiDimension has enough configuration to work."""
         return (
             all(d.ready for d in self.dimensions) if self.dimensions else False
         )
@@ -644,8 +639,8 @@ class ColorFactory:
         Structure:
         returns: [blend_method, dimension_list, dimension_list..]
             dimension_list: [interpolation_exponent, configlist]
-            config_list: [ConfigPoint, ConfigPoint..]
-            ConfigPoint: [value, color_as_html_hex_string]
+            config_list: [MappingPoint, MappingPoint..]
+            MappingPoint: [value, color_as_html_hex_string]
 
         Notes for later:  to use this as a way to save configurations...
         - str() can be saved, then turned back into this structure using eval()
@@ -662,14 +657,14 @@ class ColorFactory:
         return faclist
 
     def dump(self, quiet: bool = False) -> list[str]:
-        """Dump the contents of the ColorFactory.
+        """Dump the contents of the MultiDimension.
 
         Returns the contents as a list of strings (lines).
         By default it also prints the info; quiet flag
         will suppress printing.
         """
         lines = []
-        lines.append(f"ColorFactory {self}")
+        lines.append(f"MultiDimension {self}")
         lines.append(
             f"  ready: {self.ready}; dimensions: {len(self.dimensions)}; "
             f"blend method: {self.blend_method}"
