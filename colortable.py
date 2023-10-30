@@ -5,28 +5,35 @@ import datacolors as dc
 ##import data_color_extras as extras
 
 
-class html_thing:
+class HtmlHelper:
+    """Quick and dirty html bits."""
+
     def __init__(self) -> None:
+        """Initialize."""
         self.text = ""
 
     def print(self):
+        """Print self."""
         print(self.text)
         self.text = ""
 
     def add(self, text_to_add):
+        """Add more text to self."""
         self.text += text_to_add
 
     @staticmethod
     def html_bottom():
+        """Return bottom of html document."""
         return "</body></html>"
 
     @staticmethod
-    def html_top(cell_wid: int = 26):
-        return """Content-type: text/html\n\n
+    def html_top(title:str=""):
+        """Return a top-of-html document."""
+        return f"""Content-type: text/html\n\n
             <!DOCTYPE html>
             <html>
             <head>
-
+            <title>{title}</title>
             </head>
             <body>
     """
@@ -82,13 +89,9 @@ def make_html_color_table(
     y_label: str = "",
     num_rows: int = 20,
     num_columns: int = 20,
+    cell_size: int = 25,
 ) -> str:
     """Create html color table for cf and return it as a string."""
-
-    def top_color(dim: dc.Dimension) -> str:
-        """Get html color of greatest MappingPoint in this dimension."""
-        clr: dc.Color = dim.configs[-1].color
-        return clr.html_color
 
     def axis_label(dim: dc.Dimension) -> str:
         """Make a default label for this dimension."""
@@ -121,12 +124,12 @@ def make_html_color_table(
     x_step = x.range / (num_columns - 1)
     y_step = y.range / (num_rows - 1)
 
-    html = html_thing()
+    html = HtmlHelper()
 
     # Generate the HTML code
-    ##html.add(html_thing.style_sheet(cell_width))
+    ##html.add(HtmlHelper.style_sheet(cell_width))
     html.add(
-        f"""    <table> {html_thing.style_sheet()}
+        f"""    <table> {HtmlHelper.style_sheet(cell_wid=cell_size)}
             <tbody>
             <tr>
                 <td colspan="{num_columns+1}" style="text-align: center">{title}</td>
@@ -152,11 +155,10 @@ def make_html_color_table(
     y_index -= y_step
 
     html.add(
-        f"""
-            <tr>
-                <td rowspan="{num_rows-1}" class="rotate" style="text-align: center"><div>{y_label}</div></td>
-            </tr>
-    """
+        "<tr>"
+        f"<td rowspan='{num_rows-1}' class='rotate' style='text-align: center'>"
+        f"<div>{y_label}</div>"
+        "</td></tr>"
     )
 
     while rownum < num_rows:
@@ -185,13 +187,18 @@ def make_html_color_table(
     html.add("<tr>")
     html.add("<td></td>")
     html.add(
-        f'<td colspan={bottom_row_merge} style="text-align: left;{x.css_fg_bg(x_min)};">{round(x_min)}</td>'
+        f'<td colspan={bottom_row_merge} '
+        f'style="text-align: left;{x.css_fg_bg(x_min)};">'
+        f'{round(x_min)}</td>'
     )
     html.add(
-        f'<td colspan={num_columns - 2 * bottom_row_merge} style="text-align: center">{x_label}</td>'
+        f'<td colspan={num_columns - 2 * bottom_row_merge} '
+        f'style="text-align: center">{x_label}</td>'
     )
     html.add(
-        f'<td colspan={bottom_row_merge} style="text-align: right; {x.css_fg_bg(x_max)};">{round(x_max)}</td>'
+        f'<td colspan={bottom_row_merge} '
+        f'style="text-align: right; {x.css_fg_bg(x_max)};">'
+        f'{round(x_max)}</td>'
     )
     html.add("</tr>")
 
@@ -205,19 +212,19 @@ def make_html_color_table(
 
 
 if __name__ == "__main__":
-    rows = 30
-    columns = 30
-    cell_width = 30
+    ROWS = 30
+    COLUMNS = 30
+    CELL_WIDTH = 20
 
     cf = dc.MultiDimension()  # dc.BLEND_MULTIPLICATIVE)
-    d = cf.add_dimension(1)
+    d = cf.add_dimension(.8)
     d.add_config(0, "white")
     d.add_config(50, "blue")  # (100,255,255))
-    d = cf.add_dimension(0.67)
+    d = cf.add_dimension(.8)
     d.add_config(0, "white")
     d.add_config(100, "red")  # "#4343d3")#"royalblue")
 
-    print(html_thing.html_top(cell_wid=cell_width))
+    print(HtmlHelper.html_top())
     for blend in [
         dc.BLEND_MULTIPLICATIVE,
         dc.BLEND_MIN,
@@ -232,15 +239,16 @@ if __name__ == "__main__":
         print(
             make_html_color_table(
                 cf,
-                #title="Legend for activity chart",
-                #x_label="Busy (in+out)",
-                #y_label="Full (bikes present)",
-                num_columns=columns,
-                num_rows=rows,
+                # title="Legend for activity chart",
+                # x_label="Busy (in+out)",
+                # y_label="Full (bikes present)",
+                num_columns=COLUMNS,
+                num_rows=ROWS,
+                cell_size=CELL_WIDTH
             )
         )
 
-    print(html_thing.html_bottom)
+    print(HtmlHelper.html_bottom)
 
     dump = cf.dump(quiet=True)
     print("\n\n<pre>")

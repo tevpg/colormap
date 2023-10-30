@@ -139,8 +139,8 @@ class Color(tuple):
             r = int(html_str[1:3], 16)
             g = int(html_str[3:5], 16)
             b = int(html_str[5:7], 16)
-        except ValueError:
-            raise ValueError("Invalid HTML color string.")
+        except ValueError as exc:
+            raise ValueError("Invalid HTML color string.") from exc
 
         return (r, g, b)
 
@@ -581,6 +581,7 @@ class MultiDimension:
         return d
 
     def get_color(self, *determiner_tuple: tuple) -> Color:
+        """Calculate a color from the dimensions of this multi-dimension."""
         if not self.ready:
             raise ValueError("MultiDimension is not ready")
 

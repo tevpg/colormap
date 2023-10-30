@@ -1,4 +1,6 @@
 tmp/
+tmp_*
+tmp-*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
