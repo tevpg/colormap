@@ -2,7 +2,7 @@
 
 from PIL import Image, ImageDraw
 
-from data_colors import MultiDimension
+from datacolors import MultiDimension
 
 def visualize_dimension(
     dimension, image_size: tuple, orientation: str = "horizontal"

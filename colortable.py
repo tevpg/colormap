@@ -1,6 +1,6 @@
 """Create an html table showing shades of a 2d MultiDimension."""
 
-import data_colors as dc
+import datacolors as dc
 
 ##import data_color_extras as extras
 
@@ -212,10 +212,10 @@ if __name__ == "__main__":
     cf = dc.MultiDimension()  # dc.BLEND_MULTIPLICATIVE)
     d = cf.add_dimension(1)
     d.add_config(0, "white")
-    d.add_config(50, "magenta")  # (100,255,255))
+    d.add_config(50, "blue")  # (100,255,255))
     d = cf.add_dimension(0.67)
     d.add_config(0, "white")
-    d.add_config(100, "cyan")  # "#4343d3")#"royalblue")
+    d.add_config(100, "red")  # "#4343d3")#"royalblue")
 
     print(html_thing.html_top(cell_wid=cell_width))
     for blend in [

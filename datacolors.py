@@ -56,10 +56,10 @@ from color_names import COLOR_NAMES
 
 BLEND_LERP = "lerp"  # linear interpolation
 BLEND_ALPHA = BLEND_LERP
-BLEND_ADDITIVE = "additive"
-BLEND_SUBTRACTIVE = "subtractive"
+BLEND_ADDITIVE = "add"
+BLEND_SUBTRACTIVE = "subtract"
 BLEND_DIFFERENCE = "difference"
-BLEND_MULTIPLICATIVE = "multiplicative"
+BLEND_MULTIPLICATIVE = "multiply"
 BLEND_OVERLAY = "overlay"
 BLEND_MIN = "min"
 BLEND_MAX = "max"
