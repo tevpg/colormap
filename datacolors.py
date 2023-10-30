@@ -50,7 +50,6 @@ for (various x,y values with no text)
 
 import re
 import math
-from functools import lru_cache
 
 from color_names import COLOR_NAMES
 
@@ -123,11 +122,6 @@ class Color(tuple):
     def blue(self):
         """Get color band from tuple."""
         return self[2]
-
-    # @property
-    # def rgb(self):
-    #    """Return rgb -- FIXME placeholder until scrub out 'rgb' use elsewhere."""
-    #    return tuple(self)
 
     @staticmethod
     def _validate_rgb_tuple(rgb):
@@ -521,14 +515,12 @@ class Dimension:
     def css_bg(self, determiner: float) -> str:
         """Make a CSS background color style string component."""
         bg = self.get_color(determiner)
-        bgcol = Color(bg)
-        return f"background-color:{bgcol.html_color};"
+        return Color(bg).css_bg()
 
     def css_fg_bg(self, determiner: float) -> str:
         """Make CSS style background color component with contrasting text color."""
         bg = self.get_color(determiner)
-        fg = "black" if bg.luminance() >= 0.5 else "white"
-        return f"color:{fg};background-color:{bg.html_color};"
+        return Color(bg).css_fg_bg()
 
     def dump(
         self, indent: str = "", index: int = None, quiet: bool = False
@@ -558,6 +550,21 @@ class Dimension:
                 print(line)
         return lines
 
+    def unload(self) -> list:
+        """Unload the Dimension's configuration info into nested list.
+
+        (This list could be used to load a Dimension).
+
+        Structure:
+        returns: [interpolation_exponent, configlist]
+            config_list: [MappingPoint, MappingPoint..]
+            MappingPoint: [value, color_as_html_hex_string]
+
+        Notes for later:  to use this as a way to save configurations...
+        - str() can be saved, then turned back into this structure using eval()
+        """
+        config_list = [[con.real, con.color.html_color] for con in self.configs]
+        return [self.interpolation_exponent,config_list]
 
 class MultiDimension:
     """MultiDimension looks after n-dimensional mappings of colors."""
@@ -566,7 +573,6 @@ class MultiDimension:
         """Initialize empty MultiDimension (not much to it)."""
         self.blend_method = blend_method
         self.dimensions = []  # Each is a Dimension
-        self._config_hash = 0
 
     def add_dimension(self, interpolation_exponent: float = 1) -> Dimension:
         """Add an empty Dimension to the MultiDimension."""
@@ -574,20 +580,7 @@ class MultiDimension:
         self.dimensions.append(d)
         return d
 
-    def _get_hash(self):
-        """Get a hash of the MultiDimension config (for change detection)."""
-        return hash(str(self.unload()))
-
     def get_color(self, *determiner_tuple: tuple) -> Color:
-        """Wrap _chached_get_color so can clear its lru cache if needed."""
-        current_config_hash = self._get_hash()
-        if current_config_hash != self._config_hash:
-            self._cached_get_color.cache_clear()
-            self._config_hash = current_config_hash
-        return self._cached_get_color(determiner_tuple)
-
-    @lru_cache(maxsize=100)  # Guessing cachesize that woule be about right
-    def _cached_get_color(self, determiner_tuple: tuple) -> Color:
         if not self.ready:
             raise ValueError("MultiDimension is not ready")
 
@@ -621,20 +614,17 @@ class MultiDimension:
     def css_bg(self, determiner: tuple) -> str:
         """Make a CSS background color style string component."""
         bg = self.get_color(*determiner)
-        #print(f"{(type(bg))=}")
-        bgcol = Color(bg)
-        return f"background-color:{bgcol.html_color};"
+        return Color(bg).css_bg()
 
     def css_fg_bg(self, determiner: tuple) -> str:
         """Make CSS style background color component with contrasting text color."""
         bg = self.get_color(*determiner)
-        fg = "black" if bg.luminance() >= 0.5 else "white"
-        return f"color:{fg};background-color:{bg.html_color};"
+        return Color(bg).css_fg_bg()
 
     def unload(self) -> list:
-        """Unload the full factory configuration info (only) into simple list.
+        """Unload the multi-dimension configu info into nested list.
 
-        This list could be used to load a factory.
+        This list could be used to load (or copy) a MultiDimension.
 
         Structure:
         returns: [blend_method, dimension_list, dimension_list..]
@@ -645,16 +635,8 @@ class MultiDimension:
         Notes for later:  to use this as a way to save configurations...
         - str() can be saved, then turned back into this structure using eval()
         """
-        dimlist = []
-        for dim in self.dimensions:
-            conlist = []
-            dim:Dimension
-            for con in dim.configs:
-                conlist.append([con.real,con.color.html_color])
-            thisdim = [dim.interpolation_exponent,conlist]
-            dimlist.append(thisdim)
-        faclist = [self.blend_method,dimlist]
-        return faclist
+        dimlist = [dim.unload() for dim in self.dimensions]
+        return [self.blend_method,dimlist]
 
     def dump(self, quiet: bool = False) -> list[str]:
         """Dump the contents of the MultiDimension.
