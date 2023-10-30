@@ -211,28 +211,30 @@ if __name__ == "__main__":
 
     cf = dc.ColorFactory()  # dc.MULTIPLICATIVE_BLEND)
     d = cf.add_dimension(1)
-    d.add_config(0, "beige")
+    d.add_config(0, "white")
     d.add_config(50, "crimson")  # (100,255,255))
-    d = cf.add_dimension(1)
-    d.add_config(0, "beige")
-    d.add_config(150, "blue")#"#4343d3")#"royalblue")
+    d = cf.add_dimension(0.67)
+    d.add_config(0, "white")
+    d.add_config(100, "blue")  # "#4343d3")#"royalblue")
 
     print(html_thing.html_top(cell_wid=cell_width))
     for blend in [
         dc.MULTIPLICATIVE_BLEND,
-                dc.ALPHA_BLEND,
-                dc.SUBTRACTIVE_BLEND,
-                dc.DIFFERENCE_BLEND,
-                dc.OVERLAY_BLEND,
-                dc.ADDITIVE_BLEND,
+        dc.MIN_BLEND,
+        dc.MAX_BLEND,
+        dc.ALPHA_BLEND,
+        dc.SUBTRACTIVE_BLEND,
+        dc.DIFFERENCE_BLEND,
+        dc.OVERLAY_BLEND,
+        dc.ADDITIVE_BLEND,
     ]:
         cf.blend_method = blend
         print(
             make_html_color_table(
                 cf,
-                title="Legend for activity chart",
-                x_label="Busy (in+out)",
-                y_label="Full (bikes present)",
+                #title="Legend for activity chart",
+                #x_label="Busy (in+out)",
+                #y_label="Full (bikes present)",
                 num_columns=columns,
                 num_rows=rows,
             )
@@ -243,5 +245,5 @@ if __name__ == "__main__":
     dump = cf.dump(quiet=True)
     print("\n\n<pre>")
     for l in dump:
-       print(l)
+        print(l)
     print("</pre>")

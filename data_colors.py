@@ -56,7 +56,8 @@ SUBTRACTIVE_BLEND = "subtractive"
 DIFFERENCE_BLEND = "difference"
 MULTIPLICATIVE_BLEND = "multiplicative"
 OVERLAY_BLEND = "overlay"
-
+MIN_BLEND = "min"
+MAX_BLEND = "max"
 
 class Color(tuple):
     """A single color and its behaviors."""
@@ -269,7 +270,9 @@ class Color(tuple):
 
         # At this point, there are exactly two colors.
         color1, color2 = colors_list[0:2]
-        if blend_method in [LERP_BLEND, ALPHA_BLEND]:
+        if blend_method == MULTIPLICATIVE_BLEND:
+            result = Color._blend_multiply(color1, color2)
+        elif blend_method in [LERP_BLEND, ALPHA_BLEND]:
             result = Color.blend_lerp(color1, color2)
         elif blend_method == ADDITIVE_BLEND:
             result = Color._blend_additive(color1, color2)
@@ -277,8 +280,10 @@ class Color(tuple):
             result = Color._blend_subtractive(color1, color2)
         elif blend_method == DIFFERENCE_BLEND:
             result = Color._blend_difference(color1, color2)
-        elif blend_method == MULTIPLICATIVE_BLEND:
-            result = Color._blend_multiply(color1, color2)
+        elif blend_method == MIN_BLEND:
+            result = Color._blend_min(color1, color2)
+        elif blend_method == MAX_BLEND:
+            result = Color._blend_max(color1, color2)
         elif blend_method == OVERLAY_BLEND:
             result = Color._blend_overlay(color1, color2)
         else:
@@ -320,6 +325,26 @@ class Color(tuple):
             min(255, base_color.red + blend_color.red),
             min(255, base_color.green + blend_color.green),
             min(255, base_color.blue + blend_color.blue),
+        )
+        return Color(blended_color)
+
+    @staticmethod
+    def _blend_min(base_color: "Color", blend_color: "Color") -> "Color":
+        """Min blending of two RGB color tuples."""
+        blended_color = (
+            min(base_color.red, blend_color.red),
+            min(base_color.green, blend_color.green),
+            min(base_color.blue, blend_color.blue),
+        )
+        return Color(blended_color)
+
+    @staticmethod
+    def _blend_max(base_color: "Color", blend_color: "Color") -> "Color":
+        """Min blending of two RGB color tuples."""
+        blended_color = (
+            max(base_color.red, blend_color.red),
+            max(base_color.green, blend_color.green),
+            max(base_color.blue, blend_color.blue),
         )
         return Color(blended_color)
 
@@ -477,6 +502,8 @@ class Dimension(int):
         adjusted_determiner = self.min + (
             determiner_range**self.interpolation_exponent
         ) * (self.range ** (1 - self.interpolation_exponent))
+        # Now clamp the adjusted deteriner's range
+        adjusted_determiner = max(self.min, min(self.max, adjusted_determiner))
 
         # Find the two adjacent ConfigPoints for interpolation
         for j in range(len(self.configs) - 1):
