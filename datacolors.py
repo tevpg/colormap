@@ -190,7 +190,7 @@ class Color(tuple):
 
     def css_fg_bg(self) -> str:
         """Make CSS style background color component with contrasting text color."""
-        fg = "black" if self.luminance() >= 0.5 else "white"
+        fg = "black" if self.luminance() >= 255 else "white"
         return f"color:{fg};background-color:{self.html_color};"
 
     def __str__(self):
@@ -314,7 +314,6 @@ class Color(tuple):
                 ),
             )
         )
-        ##print(f"here in blend_lerp, {type(blended_color)=}")
         return blended_color
 
     @staticmethod
