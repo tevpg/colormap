@@ -9,25 +9,25 @@ Conceptually, there is a
     converted, how the colours are combined, etc
 
 
-ColorFactory is the color factory. It exposes methods to configure the factory
+MultiDimension is the color factory. It exposes methods to configure the factory
 and get a color based on dataspace parameters.
 
 Each dataspace dimension determines a single color (dimension); when there
 are multiple dimensions the resulting colors are then blended using any of
 several blend methods.
 
-ColorFactory is defined by the color blending method and one or more config dimensions
+MultiDimension is defined by the color blending method and one or more config dimensions
 Each Dimension is defined by the linearity of the relation between the data parameter
 and the colorspace color range, and one or more ConfigPoints.
-A ConfigPoint relates a single data value in one dimension to a single output color.
-A Dimension with only one ConfigPoint simply always produces that color.
+A MappingPoint relates a single data value in one dimension to a single output color.
+A Dimension with only one MappingPoint simply always produces that color.
 A Dimension with multiple ConfigPoints will interpolate colors along gradiants
 defined by numerically adjacent ConfigPoints.  Out of range data values are
 clamped to the min/max data values of the available ConfigPoints.
 
 
 Example use:
-factory = ColorFactory(LERP)
+factory = MultiDimension(LERP)
 d1 = factory.add_dimension(linearity=1)
 d2 = factory.add_dimension(linearity=0.5)
 d1.add_config(-10,'blue')

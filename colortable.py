@@ -41,18 +41,16 @@ class HtmlHelper:
     @staticmethod
     def style_sheet(cell_wid: int = 25) -> str:
         """Return a style sheet for the table."""
-        return f"""<style>
-            html {{
-                font-family: sans-serif;
-            }}
-            table {{
+
+        s = f"""<style>
+            .colortable {{
                 border-collapse: collapse;
                 font-size: 0.8rem;
             }}
-            table, th, td {{
+            .colortable, .colortable th, .colortable td {{
                 border: none;
             }}
-            th, td {{
+            .colortable th, .colortable td {{
                 width: {cell_wid}px;
                 height: {cell_wid}px;
                 padding: 0;
@@ -64,7 +62,7 @@ class HtmlHelper:
                 width: 1.5em;
             }}
             .rotate div {{
-                    -moz-transform: rotate(-90.0deg);  /* FF3.5+ */
+                -moz-transform: rotate(-90.0deg);  /* FF3.5+ */
                     -o-transform: rotate(-90.0deg);  /* Opera 10.5 */
                 -webkit-transform: rotate(-90.0deg);  /* Saf3.1+, Chrome */
                             filter:  progid:DXImageTransform.Microsoft.BasicImage(rotation=0.083);  /* IE6,IE7 */
@@ -72,14 +70,13 @@ class HtmlHelper:
                         margin-left: -10em;
                         margin-right: -10em;
             }}
-
-            table {{border:1px solid #000;}}
-            tr {{border-top:1px solid #000;}}
-            tr + tr {{border-top:1px solid white;}}
-            td {{border-left:1px solid #000;}}
-            td + td {{border-left:1px solid white;}}
-
+            .colortable {{ border: 1px solid #000;}}
+            .colortable tr {{border-top: 1px solid #000;}}
+            .colortable tr + tr {{border-top: 1px solid white;}}
+            .colortable td {{border-left: 1px solid #000;}}
+            .colortable td + td {{border-left: 1px solid white;}}
             </style>"""
+        return s
 
 
 def make_html_color_table(
@@ -127,9 +124,9 @@ def make_html_color_table(
     html = HtmlHelper()
 
     # Generate the HTML code
-    ##html.add(HtmlHelper.style_sheet(cell_width))
+    html.add(HtmlHelper.style_sheet(cell_size))
     html.add(
-        f"""    <table> {HtmlHelper.style_sheet(cell_wid=cell_size)}
+        f"""<table class='colortable'>
             <tbody>
             <tr>
                 <td colspan="{num_columns+1}" style="text-align: center">{title}</td>
