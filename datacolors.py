@@ -1,6 +1,27 @@
 """Generate blended colors based on n-dimensional data inputs.
 
-Copyright (c) 2023, tevpg@github.com
+MIT License
+
+Copyright (c) 2023, github.com/tevpg
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
 
 Conceptually, there is a
 - data space: numeric data in one or more dimensions
@@ -40,7 +61,7 @@ d2.add_config(min_val,'white')
 d2.add_config(max_val,'rgb(147,10,20)')
 
 for (various x values, with text):
-    print(f"<td style={factory.css_fg_bg(x)}>{x}</td>")
+    print(f"<td style={factory.css_bg_fg(x)}>{x}</td>")
 
 for (various x,y values with no text)
     print(f"<td style={factory.css_bg(x,y)}>&nbsp;<td>")
@@ -62,6 +83,7 @@ BLEND_MULTIPLICATIVE = "multiply"
 BLEND_OVERLAY = "overlay"
 BLEND_MIN = "min"
 BLEND_MAX = "max"
+
 
 class Color(tuple):
     """A single color and its behaviors."""
@@ -184,11 +206,15 @@ class Color(tuple):
         luminance = 0.299 * self.red + 0.587 * self.green + 0.114 * self.blue
         return luminance
 
+    def css_fg(self) -> str:
+        """Make a CSS (foreground) color style string component."""
+        return f"color:{self.html_color};"
+
     def css_bg(self) -> str:
         """Make a CSS background color style string component."""
         return f"background-color:{self.html_color};"
 
-    def css_fg_bg(self) -> str:
+    def css_bg_fg(self) -> str:
         """Make CSS style background color component with contrasting text color."""
         fg = "black" if self.luminance() >= 128 else "white"
         return f"color:{fg};background-color:{self.html_color};"
@@ -245,12 +271,12 @@ class Color(tuple):
         return f"{closest_color} ({(1 - closeness)*100:.1f}% match)"
 
     @staticmethod
-    def invert( color:'Color') -> 'Color':
+    def invert(color: "Color") -> "Color":
         """Inverts the color."""
-        r = 255-color[0]
-        g = 255-color[1]
-        b = 255-color[2]
-        return Color(Color._clamp_tuple((r,g,b)))
+        r = 255 - color[0]
+        g = 255 - color[1]
+        b = 255 - color[2]
+        return Color(Color._clamp_tuple((r, g, b)))
 
     @staticmethod
     def blend(colors_list: list["Color"], blend_method=BLEND_ALPHA) -> tuple:
@@ -451,7 +477,12 @@ class Dimension:
     of the range.
     """
 
-    def __init__(self, interpolation_exponent: float = 1, none_color:str = "white"):
+    def __init__(
+        self,
+        interpolation_exponent: float = 1,
+        none_color: str = "white",
+        label=None,
+    ):
         """Set initial values for Dimension properties."""
         if interpolation_exponent < 0:
             raise ValueError("Interpolation exponent must be >= 0.")
@@ -462,6 +493,7 @@ class Dimension:
         self.max = None
         self.range = None
         self.none_color = None if none_color is None else Color(none_color)
+        self.label = label
 
     def add_config(self, determiner: float, color: str) -> None:
         """Add a MappingPoint to this dimension."""
@@ -479,13 +511,28 @@ class Dimension:
         self.range = self.max - self.min
         self.ready = True
 
+    def get_label(self) -> str:
+        """Return the known or a default label for this Dimension.
+
+        The default label will not be known until MappingPoint's are
+        added. If a self.label is known to exist, use that.  Else
+        use this."""
+
+        if self.label:
+            return self.label
+        # Create a default label
+        lab = " => ".join([p.color.similar_to() for p in self.configs])
+        if self.interpolation_exponent != 1:
+            lab = f"{lab}  exp={self.interpolation_exponent}"
+        return lab
+
     def get_color(self, determiner: float) -> Color:
         """Blend within gradients to get a color for this determiner value."""
         if self.range <= 0:
             return self.configs[0].color
         if determiner is None:
             if self.none_color is None:
-                raise TypeError( "determiner is None and no default given")
+                raise TypeError("determiner is None and no default given")
             else:
                 return Color(self.none_color)
 
@@ -517,15 +564,20 @@ class Dimension:
             gradient_min.color, gradient_max.color, blend_factor
         )
 
+    def css_fg(self, determiner: float) -> str:
+        """Make a CSS (foreground) color style string component."""
+        fg = self.get_color(determiner)
+        return Color(fg).css_fg()
+
     def css_bg(self, determiner: float) -> str:
         """Make a CSS background color style string component."""
         bg = self.get_color(determiner)
         return Color(bg).css_bg()
 
-    def css_fg_bg(self, determiner: float) -> str:
+    def css_bg_fg(self, determiner: float) -> str:
         """Make CSS style background color component with contrasting text color."""
         bg = self.get_color(determiner)
-        return Color(bg).css_fg_bg()
+        return Color(bg).css_bg_fg()
 
     def dump(
         self, indent: str = "", index: int = None, quiet: bool = False
@@ -569,9 +621,14 @@ class Dimension:
         Notes for later:  to use this as a way to save configurations...
         - str() can be saved, then turned back into this structure using eval()
         """
-        config_list = [[con.real, con.color.html_color] for con in self.configs]
-        none_color = None if self.none_color is None else self.none_color.html_color
-        return [self.interpolation_exponent,none_color,config_list]
+        config_list = [
+            [con.real, con.color.html_color] for con in self.configs
+        ]
+        none_color = (
+            None if self.none_color is None else self.none_color.html_color
+        )
+        return [self.interpolation_exponent, none_color, config_list]
+
 
 class MultiDimension:
     """MultiDimension looks after n-dimensional mappings of colors."""
@@ -581,9 +638,18 @@ class MultiDimension:
         self.blend_method = blend_method
         self.dimensions = []  # Each is a Dimension
 
-    def add_dimension(self, interpolation_exponent: float = 1,none_color:str="white") -> Dimension:
+    def add_dimension(
+        self,
+        interpolation_exponent: float = 1,
+        none_color: str = "white",
+        label: str = None,
+    ) -> Dimension:
         """Add an empty Dimension to the MultiDimension."""
-        d = Dimension(interpolation_exponent,none_color)
+        d = Dimension(
+            interpolation_exponent=interpolation_exponent,
+            none_color=none_color,
+            label=label,
+        )
         self.dimensions.append(d)
         return d
 
@@ -619,15 +685,20 @@ class MultiDimension:
             all(d.ready for d in self.dimensions) if self.dimensions else False
         )
 
+    def css_fg(self, determiner: tuple) -> str:
+        """Make a CSS (foreground) color style string component."""
+        fg = self.get_color(*determiner)
+        return Color(fg).css_fg()
+
     def css_bg(self, determiner: tuple) -> str:
         """Make a CSS background color style string component."""
         bg = self.get_color(*determiner)
         return Color(bg).css_bg()
 
-    def css_fg_bg(self, determiner: tuple) -> str:
+    def css_bg_fg(self, determiner: tuple) -> str:
         """Make CSS style background color component with contrasting text color."""
         bg = self.get_color(*determiner)
-        return Color(bg).css_fg_bg()
+        return Color(bg).css_bg_fg()
 
     def unload(self) -> list:
         """Unload the multi-dimension configu info into nested list.
@@ -644,7 +715,7 @@ class MultiDimension:
         - str() can be saved, then turned back into this structure using eval()
         """
         dimlist = [dim.unload() for dim in self.dimensions]
-        return [self.blend_method,dimlist]
+        return [self.blend_method, dimlist]
 
     def dump(self, quiet: bool = False) -> list[str]:
         """Dump the contents of the MultiDimension.

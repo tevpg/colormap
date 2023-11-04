@@ -1,8 +1,29 @@
-"""Create an html table showing shades of a 2d MultiDimension."""
+"""Create html tables that can act as legends for Dimension and MultiDimensions.
+
+MIT License
+
+Copyright (c) 2023, github.com/tevpg
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+"""
 
 import datacolors as dc
-
-##import data_color_extras as extras
 
 
 class HtmlHelper:
@@ -27,7 +48,7 @@ class HtmlHelper:
         return "</body></html>"
 
     @staticmethod
-    def html_top(title:str=""):
+    def html_top(title: str = ""):
         """Return a top-of-html document."""
         return f"""Content-type: text/html\n\n
             <!DOCTYPE html>
@@ -43,14 +64,14 @@ class HtmlHelper:
         """Return a style sheet for the table."""
 
         s = f"""<style>
-            .colortable {{
+            .colortable2d {{
                 border-collapse: collapse;
                 font-size: 0.8rem;
             }}
-            .colortable, .colortable th, .colortable td {{
+            .colortable2d, .colortable2d th, .colortable2d td {{
                 border: none;
             }}
-            .colortable th, .colortable td {{
+            .colortable2d th, .colortable2d td {{
                 width: {cell_wid}px;
                 height: {cell_wid}px;
                 padding: 0;
@@ -70,16 +91,16 @@ class HtmlHelper:
                         margin-left: -10em;
                         margin-right: -10em;
             }}
-            .colortable {{ border: 1px solid #000;}}
-            .colortable tr {{border-top: 1px solid #000;}}
-            .colortable tr + tr {{border-top: 1px solid white;}}
-            .colortable td {{border-left: 1px solid #000;}}
-            .colortable td + td {{border-left: 1px solid white;}}
+            .colortable2d {{ border: 1px solid #000;}}
+            .colortable2d tr {{border-top: 1px solid #000;}}
+            .colortable2d tr + tr {{border-top: 1px solid white;}}
+            .colortable2d td {{border-left: 1px solid #000;}}
+            .colortable2d td + td {{border-left: 1px solid white;}}
             </style>"""
         return s
 
 
-def make_html_color_table(
+def html_2d_color_table(
     factory: dc.MultiDimension,
     title: str = "",
     x_label: str = "",
@@ -90,26 +111,26 @@ def make_html_color_table(
 ) -> str:
     """Create html color table for cf and return it as a string."""
 
-    def axis_label(dim: dc.Dimension) -> str:
-        """Make a default label for this dimension."""
-        lab = " => ".join([p.color.similar_to() for p in dim.configs])
-        if dim.interpolation_exponent != 1:
-            lab = f"{lab}  exp={dim.interpolation_exponent}"
-        return lab
-
-    def cell(factory: dc.MultiDimension, x_index, y_index) -> str:
+    def cell(
+        factory: dc.MultiDimension,
+        x_index,
+        y_index,
+        x_label: str = "",
+        y_label: str = "",
+    ) -> str:
         """Return a coloured html table cell."""
-        c = factory.get_color(x_index, y_index).html_color
-        return (
-            f"<td style={factory.css_bg((x_index,y_index))} title='{c}'></td>"
+        this_color = factory.get_color(x_index, y_index)
+        title_text = (
+            f"{x_label}: {round(x_index)}\n{y_label}: {round(y_index)}"
         )
+        c = factory.get_color(x_index, y_index).html_color
+        return f"<td style='{this_color.css_bg()}' title='{title_text}'></td>"
 
     x: dc.Dimension = factory.dimensions[0]
     y: dc.Dimension = factory.dimensions[1]
-    if not x_label:
-        x_label = axis_label(x)
-    if not y_label:
-        y_label = axis_label(y)
+    # custom_labels = bool(x_label or y_label)
+    x_label = x.get_label()
+    y_label = y.get_label()
     if not title:
         title = f"Blend method: {factory.blend_method}"
 
@@ -126,7 +147,7 @@ def make_html_color_table(
     # Generate the HTML code
     html.add(HtmlHelper.style_sheet(cell_size))
     html.add(
-        f"""<table class='colortable'>
+        f"""<table class='colortable2d'>
             <tbody>
             <tr>
                 <td colspan="{num_columns+1}" style="text-align: center">{title}</td>
@@ -141,11 +162,11 @@ def make_html_color_table(
     rownum = 1
     html.add("            <tr>")
     html.add(
-        f"               <td style='{y.css_fg_bg(y_max)}'>{round(y_max)}</td>"
+        f"               <td style='{y.css_bg_fg(y_max)}'>{round(y_max)}</td>"
     )
     x_index = x_min
     for _ in range(num_columns):
-        html.add(cell(factory, x_index, y_index))
+        html.add(cell(factory, x_index, y_index, x_label, y_label))
         x_index += x_step
     html.add("</tr>\n")
     rownum += 1
@@ -162,7 +183,7 @@ def make_html_color_table(
         html.add("            <tr>")
         x_index = x_min
         for _ in range(num_columns):
-            html.add(cell(factory, x_index, y_index))
+            html.add(cell(factory, x_index, y_index, x_label, y_label))
             x_index += x_step
         html.add("</tr>\n")
         rownum += 1
@@ -171,11 +192,11 @@ def make_html_color_table(
     # bottom row (includes y_min)
     html.add("            <tr>")
     html.add(
-        f"               <td style='{y.css_fg_bg(y_min)}'>{round(y_min)}</td>"
+        f"               <td style='text-align: center;{y.css_bg_fg(y_min)}'>{round(y_min)}</td>"
     )
     x_index = x_min
     for _ in range(num_columns):
-        html.add(cell(factory, x_index, y_index))
+        html.add(cell(factory, x_index, y_index, x_label, y_label))
         x_index += x_step
     html.add("</tr>\n")
 
@@ -184,19 +205,80 @@ def make_html_color_table(
     html.add("<tr>")
     html.add("<td></td>")
     html.add(
-        f'<td colspan={bottom_row_merge} '
-        f'style="text-align: left;{x.css_fg_bg(x_min)};">'
-        f'{round(x_min)}</td>'
+        f"<td colspan={bottom_row_merge} "
+        f'style="text-align: center;{x.css_bg_fg(x_min)};">'
+        f"{round(x_min)}</td>"
     )
     html.add(
-        f'<td colspan={num_columns - 2 * bottom_row_merge} '
+        f"<td colspan={num_columns - 2 * bottom_row_merge} "
         f'style="text-align: center">{x_label}</td>'
     )
     html.add(
-        f'<td colspan={bottom_row_merge} '
-        f'style="text-align: right; {x.css_fg_bg(x_max)};">'
-        f'{round(x_max)}</td>'
+        f"<td colspan={bottom_row_merge} "
+        f'style="text-align: right; {x.css_bg_fg(x_max)};">'
+        f"{round(x_max)}</td>"
     )
+    html.add("</tr>")
+
+    # Close the HTML
+    html.add(
+        """        </tbody>
+        </table>
+    """
+    )
+    return html.text
+
+def html_1d_text_color_table(
+    dim: dc.Dimension,
+    title: str = "",
+    subtitle: str = "",
+    marker:str = chr(0x25cf),
+    num_columns: int = 20,
+    cell_size: int = 25,
+    bg_color: dc.Color = dc.Color('white'),
+) -> str:
+    """Create html color table for cf and return it as a string."""
+
+    def cell(
+        dim: dc.Dimension,
+        index,
+        label: str = "",
+        bg_color: dc.Color = dc.Color('lightgrey'),
+    ) -> str:
+        """Return a text-coloured html table cell."""
+        this_color = dim.get_color(index).css_fg()
+        title_text = (
+            f"{label}: {round(index)}"
+        )
+        bg_color = dc.Color(bg_color).css_bg()
+        return f"<td style='text-align:center;{this_color};{bg_color};' title='{title_text}'>{marker}</td>"
+
+    label = dim.get_label()
+    title = title if title else label
+    html = HtmlHelper()
+    html.add(HtmlHelper.style_sheet(cell_size))
+    html.add(
+        f"""<table class='colortable2d'>
+            <tbody>
+            <tr>
+                <td colspan="{num_columns}" style="text-align: center"><b>{title}</b></td>
+            </tr>
+    """
+    )
+
+    # A row of colors
+    html.add("<tr>")
+    step = dim.range / (num_columns)
+    index = dim.min
+    for _ in range(num_columns):
+        html.add(cell(dim,index,label=label))
+        index += step
+    html.add("</tr>")
+    # A row to show the values
+    html.add("<tr>")
+    html.add(f"<td colspan=2 style='text-align:left;{dim.css_bg_fg(dim.min)};'>{round(dim.min)}</td>")
+    html.add(f"<td colspan={num_columns-4} style='text-align:center'>{subtitle}</td>")
+    html.add(f"<td colspan=2 style='{dim.css_bg_fg(dim.max)};'>{round(dim.max)}</td>")
     html.add("</tr>")
 
     # Close the HTML
@@ -214,10 +296,10 @@ if __name__ == "__main__":
     CELL_WIDTH = 20
 
     cf = dc.MultiDimension()  # dc.BLEND_MULTIPLICATIVE)
-    d = cf.add_dimension(.8)
+    d = cf.add_dimension(0.8)
     d.add_config(0, "white")
     d.add_config(50, "blue")  # (100,255,255))
-    d = cf.add_dimension(.8)
+    d = cf.add_dimension(0.8)
     d.add_config(0, "white")
     d.add_config(100, "red")  # "#4343d3")#"royalblue")
 
@@ -234,14 +316,14 @@ if __name__ == "__main__":
     ]:
         cf.blend_method = blend
         print(
-            make_html_color_table(
+            html_2d_color_table(
                 cf,
                 # title="Legend for activity chart",
                 # x_label="Busy (in+out)",
                 # y_label="Full (bikes present)",
                 num_columns=COLUMNS,
                 num_rows=ROWS,
-                cell_size=CELL_WIDTH
+                cell_size=CELL_WIDTH,
             )
         )
 
